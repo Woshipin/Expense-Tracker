@@ -11,6 +11,10 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/auth/{provider}', [AuthController::class, 'redirectToProvider']);
 Route::get('/auth/{provider}/callback', [AuthController::class, 'handleProviderCallback']);
 
+// 【新增】忘记密码 & 重置密码 路由
+Route::post('/forgot-password', [AuthController::class, 'sendResetLinkEmail']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+
 // 受保护路由 (需要 JWT Token)
 Route::middleware('auth:api')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);

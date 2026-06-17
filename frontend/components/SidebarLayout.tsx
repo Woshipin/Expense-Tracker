@@ -17,7 +17,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  const isAuthPage = pathname === "/login" || pathname === "/register";
+  // 【修改】将 forgot-password 和 reset-password 页面加入免登录白名单，防止被路由守卫拦截
+  const isAuthPage = 
+    pathname === "/login" || 
+    pathname === "/register" || 
+    pathname === "/forgot-password" || 
+    pathname === "/reset-password";
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -26,7 +31,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         setUser(response.data); 
         
         if (isAuthPage) {
-          // 【修改】已登录但试图通过 URL 访问 login/register
+          // 已登录但试图通过 URL 访问 auth 相关页面
           setToast({ message: "You are already logged in. Redirecting...", type: "error" });
           setTimeout(() => {
             router.push('/dashboard');
@@ -38,7 +43,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
       } catch (error) {
         setUser(null);
         if (!isAuthPage) {
-          // 【修改】未登录但试图通过 URL 访问内部页面
+          // 未登录但试图通过 URL 访问内部页面
           setToast({ message: "Please login to access this page.", type: "error" });
           setTimeout(() => {
             router.push('/login');
@@ -71,7 +76,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
       setIsLogoutModalOpen(false);
       setUser(null);
       setToast({ message: "Logout successful. Redirecting...", type: "success" });
-      // 【修改】登出等待 1.5 秒后跳转
       setTimeout(() => {
         router.push('/login');
       }, 1500);
@@ -83,7 +87,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-orange-50 via-red-50 to-orange-100">
         <Loader2 className="w-12 h-12 text-orange-500 animate-spin mb-4" />
         <p className="text-gray-500 font-medium">Verifying access...</p>
-        {/* 【关键新增】让非法拦截时的红色 Toast 能在 Loading 界面显示出来 */}
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       </div>
     );

@@ -1,13 +1,15 @@
 <?php
 
-namespace App\Http\Controllers; 
+namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Cookie;
-use Laravel\Socialite\Facades\Socialite; 
+use Laravel\Socialite\Facades\Socialite;
+use Illuminate\Support\Facades\Password; // 【新增】用于密码重置
+use Illuminate\Auth\Events\PasswordReset; // 【新增】用于触发密码重置成功事件
 
 class AuthController extends Controller
 {
@@ -54,12 +56,16 @@ class AuthController extends Controller
             return response()->json(['error' => 'Account is banned or inactive (账号被封禁或未激活)'], 403);
         }
 
-        return $this->respondWithToken($token, 'Login successful');
+        // 获取前端传来的 rememberMe 参数
+        $remember = $request->boolean('rememberMe');
+
+        return $this->respondWithToken($token, 'Login successful', $remember);
     }
 
-    /**
-     * 1. 重定向用户到第三方授权页面 (Google / Facebook)
-     */
+    // ==========================================
+    // Laravel Socialite 核心逻辑开始
+    // ==========================================
+
     public function redirectToProvider($provider)
     {
         if (!in_array($provider, ['google', 'facebook'])) {
@@ -68,12 +74,11 @@ class AuthController extends Controller
         
         $driver = Socialite::driver($provider)->stateless();
 
-        // 【新增】如果是 Google 登录，强制每次都弹出选择账号的界面
+        // 强制每次弹出选择账号
         if ($provider === 'google') {
             $driver->with(['prompt' => 'select_account']);
         }
-
-        // 【新增】如果是 Facebook 登录，强制每次要求重新验证身份 (可选，体验更好)
+        // 强制 Facebook 重新验证
         if ($provider === 'facebook') {
             $driver->with(['auth_type' => 'reauthenticate']);
         }
@@ -81,9 +86,6 @@ class AuthController extends Controller
         return $driver->redirect();
     }
 
-    /**
-     * 2. 第三方授权成功后的回调处理
-     */
     public function handleProviderCallback($provider)
     {
         try {
@@ -92,36 +94,29 @@ class AuthController extends Controller
             return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=social_auth_failed');
         }
 
-        // 查找用户是否已存在（依据唯一的邮箱匹配，实现账号合并）
         $user = User::where('email', $socialUser->getEmail())->first();
 
         if (!$user) {
-            // 【情况 A】这个邮箱从来没在我们的系统出现过 -> 完全新建一个账号
             $user = User::create([
                 'full_name'   => $socialUser->getName() ?? 'User',
                 'email'       => $socialUser->getEmail(),
                 'password'    => null, 
-                'provider'    => $provider, // 记录最初的注册来源 (google 或 facebook)
+                'provider'    => $provider,
                 'provider_id' => $socialUser->getId(),
                 'image_path'  => $socialUser->getAvatar(),
             ]);
         } else {
-            // 【情况 B】这个邮箱已经存在了（可能是以前 Register 的，也可能是其他平台登录的）
-            // 我们不覆盖他的 provider，只在他没有头像的时候，帮他把第三方头像同步过来
             if (!$user->image_path) {
                 $user->update([
                     'image_path' => $socialUser->getAvatar(),
                 ]);
             }
-            // 只要邮箱匹配，直接往下走，允许他登录旧账号！
         }
 
-        // 检查账号状态是否被封禁
         if ($user->status === User::STATUS_INACTIVE) {
             return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=account_banned');
         }
 
-        // 生成 JWT Token 并登录
         $token = auth('api')->login($user);
         $ttl = auth('api')->factory()->getTTL();
 
@@ -129,21 +124,74 @@ class AuthController extends Controller
             'jwt_token', $token, $ttl, '/', null, env('APP_ENV') === 'production', true, false, 'Lax'
         );
 
-        // 登录成功，带着 Cookie 重定向回前端的 Dashboard
         return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/dashboard')->withCookie($cookie);
     }
 
+    // ==========================================
+    // 密码重置逻辑 (Forgot / Reset Password)
+    // ==========================================
+
     /**
-     * 获取当前登录的用户信息 (Me)
+     * 发送重置密码邮件
      */
+    public function sendResetLinkEmail(Request $request)
+    {
+        $request->validate(['email' => 'required|email']);
+
+        // 检查该邮箱是否是第三方快捷登录（没密码）的用户，防止他们误操作
+        $user = User::where('email', $request->email)->first();
+        if ($user && $user->provider) {
+            return response()->json([
+                'message' => 'This account uses Social Login. Please login via ' . ucfirst($user->provider) . '.'
+            ], 400);
+        }
+
+        // 调用 Laravel 底层 Broker 发送带 Token 的邮件
+        $status = Password::broker()->sendResetLink(
+            $request->only('email')
+        );
+
+        return $status === Password::RESET_LINK_SENT
+                    ? response()->json(['message' => __($status)])
+                    : response()->json(['message' => __($status)], 400);
+    }
+
+    /**
+     * 执行密码重置
+     */
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'token' => 'required',
+            'email' => 'required|email',
+            'password' => 'required|min:6|confirmed', // 要求前端必须传 password_confirmation
+        ]);
+
+        $status = Password::broker()->reset(
+            $request->only('email', 'password', 'password_confirmation', 'token'),
+            function ($user, $password) {
+                $user->forceFill([
+                    'password' => Hash::make($password)
+                ])->save();
+
+                event(new PasswordReset($user));
+            }
+        );
+
+        return $status === Password::PASSWORD_RESET
+                    ? response()->json(['message' => __($status)])
+                    : response()->json(['message' => __($status)], 400);
+    }
+
+    // ==========================================
+    // 用户信息与鉴权
+    // ==========================================
+
     public function me()
     {
         return response()->json(auth('api')->user());
     }
 
-    /**
-     * 用户登出
-     */
     public function logout()
     {
         auth('api')->logout();
@@ -152,20 +200,18 @@ class AuthController extends Controller
         return response()->json(['message' => 'Successfully logged out'])->withCookie($cookie);
     }
 
-    /**
-     * 刷新 Token
-     */
     public function refresh()
     {
         return $this->respondWithToken(auth('api')->refresh(), 'Token refreshed');
     }
 
-    /**
-     * 统一封装：将 Token 放入 HttpOnly Cookie 并返回响应
-     */
-    protected function respondWithToken($token, $message = 'Success')
+    protected function respondWithToken($token, $message = 'Success', $remember = false)
     {
         $ttl = auth('api')->factory()->getTTL();
+
+        if ($remember) {
+            $ttl = 43200; // 30天
+        }
 
         $cookie = cookie(
             'jwt_token',   
