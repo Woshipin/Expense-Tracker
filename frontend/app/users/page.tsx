@@ -200,16 +200,13 @@ export default function UsersPage() {
   };
 
   return (
-    // 使用 Fragment 包裹，把 Modal 剥离出含有 transform 的层叠上下文，绝对解决被侧边栏遮挡的问题！
     <>
       {toast && <div className="fixed top-4 right-4 z-[10000]"><Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /></div>}
 
-      {/* 1. View User Modal (提取到了根节点，z-[9999] 彻底覆盖全屏) */}
+      {/* 1. View User Modal */}
       {viewingUser && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 pb-20 md:pb-6 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
-          {/* 将 xl:max-w-4xl 配合 max-w-2xl，在 iPad(1024px及以下) 只占宽 672px，绝不越界 */}
           <div className="bg-white w-full max-w-2xl xl:max-w-4xl rounded-3xl sm:rounded-[2rem] shadow-2xl flex flex-col max-h-[calc(100vh-110px)] sm:max-h-[95vh] animate-in zoom-in-95 duration-200 overflow-hidden">
-            
             <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-sunset-primary/10 flex justify-between items-center shrink-0">
               <h2 className="text-xl sm:text-2xl font-bold text-sunset-dark">User Details</h2>
               <button onClick={() => setViewingUser(null)} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 transition-colors">
@@ -218,13 +215,9 @@ export default function UsersPage() {
             </div>
             
             <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar flex-1">
-              {/* xl:grid-cols-2：只有大于 1280px 才并排，iPad 和手机统统单列！ */}
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6 items-stretch">
-                
-                {/* Profile Card */}
                 <div className="bg-blue-50/40 rounded-2xl sm:rounded-[1.5rem] p-6 border border-blue-100 flex flex-col items-center justify-center gap-4 text-center h-full relative overflow-hidden">
                   <div className="absolute top-0 w-full h-24 bg-gradient-to-b from-blue-100/50 to-transparent"></div>
-                  
                   <div className="relative z-10 shrink-0">
                     {viewingUser?.image_path ? (
                       <img src={viewingUser.image_path} alt="Avatar" className="w-24 h-24 sm:w-28 sm:h-28 rounded-[2rem] object-cover border-[3px] border-white shadow-lg" referrerPolicy="no-referrer" />
@@ -234,19 +227,16 @@ export default function UsersPage() {
                       </div>
                     )}
                   </div>
-                  
                   <div className="relative z-10 mt-2">
                     <h3 className="font-extrabold text-sunset-dark text-xl sm:text-2xl leading-tight">{viewingUser?.full_name}</h3>
                     <p className="font-medium text-sunset-dark/60 text-sm mt-1">{viewingUser?.email}</p>
                   </div>
                 </div>
 
-                {/* System & Access Card */}
                 <div className="bg-emerald-50/40 rounded-2xl sm:rounded-[1.5rem] p-6 border border-emerald-100 flex flex-col justify-center h-full">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 uppercase tracking-widest flex items-center mb-5 sm:mb-6">
                     <ShieldCheck size={18} className="mr-2 text-emerald-500" /> System & Access
                   </h3>
-                  
                   <div className="space-y-4 sm:space-y-6">
                     <div>
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 uppercase tracking-widest block mb-1.5">Channel / Provider</label>
@@ -262,10 +252,8 @@ export default function UsersPage() {
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
-            
             <div className="px-5 sm:px-8 py-4 sm:py-5 border-t border-sunset-primary/10 flex justify-end shrink-0 bg-gray-50/50 rounded-b-3xl sm:rounded-b-[2rem]">
               <Button onClick={() => setViewingUser(null)} className="w-full sm:w-auto px-6 sm:px-8 shadow-sm">Close Window</Button>
             </div>
@@ -277,50 +265,28 @@ export default function UsersPage() {
       {(isAddOpen || editingUser) && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 pb-20 md:pb-6 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl xl:max-w-[950px] rounded-3xl sm:rounded-[2rem] shadow-2xl flex flex-col max-h-[calc(100vh-110px)] sm:max-h-[95vh] animate-in zoom-in-95 duration-200 overflow-hidden">
-            
-            {/* Header */}
             <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-sunset-primary/10 flex justify-between items-center shrink-0">
               <h2 className="text-xl sm:text-2xl font-bold text-sunset-dark">{editingUser ? "Edit User" : "Add User"}</h2>
               <button onClick={() => { setIsAddOpen(false); setEditingUser(null); setShowPassword(false); }} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 transition-colors">
                 <X size={20} />
               </button>
             </div>
-
-            {/* Body - 同样改为 xl:grid-cols-2 保留 iPad 的垂直布局 */}
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 items-start">
-                
-                {/* Left Column (Section 1) */}
                 <div className="bg-blue-50/40 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-blue-100 flex flex-col gap-4 sm:gap-5">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 uppercase tracking-widest flex items-center">
                     <User size={16} className="mr-2 text-blue-500" /> Account Information
                   </h3>
-                  
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Full Name</label>
-                    <Input 
-                      placeholder="John Doe" 
-                      value={formData.full_name} 
-                      onChange={(e) => setFormData({...formData, full_name: e.target.value})} 
-                      className="h-10 sm:h-11 text-sm bg-white" 
-                      autoComplete="off" 
-                    />
+                    <Input placeholder="John Doe" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" autoComplete="off" />
                     {errors.full_name && <p className="text-xs text-red-500 mt-1 pl-1">{errors.full_name[0]}</p>}
                   </div>
-                  
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Email</label>
-                    <Input 
-                      type="email" 
-                      placeholder="john@example.com" 
-                      value={formData.email} 
-                      onChange={(e) => setFormData({...formData, email: e.target.value})} 
-                      className="h-10 sm:h-11 text-sm bg-white" 
-                      autoComplete="new-email" 
-                    />
+                    <Input type="email" placeholder="john@example.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" autoComplete="new-email" />
                     {errors.email && <p className="text-xs text-red-500 mt-1 pl-1">{errors.email[0]}</p>}
                   </div>
-                  
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1.5 block">Avatar Image (头像上传)</label>
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
@@ -332,41 +298,28 @@ export default function UsersPage() {
                           <span className="text-[9px] sm:text-[10px] font-bold text-gray-400">Empty</span>
                         </div>
                       )}
-                      <input 
-                        type="file" accept="image/*" onChange={handleImageChange}
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-sunset-dark focus:outline-none focus:border-orange-500 cursor-pointer"
-                      />
+                      <input type="file" accept="image/*" onChange={handleImageChange} className="w-full bg-white border border-gray-200 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-sunset-dark focus:outline-none focus:border-orange-500 cursor-pointer" />
                     </div>
                     {errors.image && <p className="text-xs text-red-500 mt-1 pl-1">{errors.image[0]}</p>}
                   </div>
                 </div>
 
-                {/* Right Column (Section 2) */}
                 <div className="bg-emerald-50/40 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-emerald-100 flex flex-col gap-4 sm:gap-5">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 uppercase tracking-widest flex items-center">
                     <Lock size={16} className="mr-2 text-emerald-500" /> Credentials & Role Settings
                   </h3>
-                  
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">
                       {editingUser ? "New Password (Optional)" : "Password"}
                     </label>
                     <div className="relative">
-                      <Input 
-                        type={showPassword ? "text" : "password"} 
-                        placeholder="••••••••" 
-                        value={formData.password} 
-                        onChange={(e) => setFormData({...formData, password: e.target.value})} 
-                        className="pr-10 h-10 sm:h-11 text-sm bg-white" 
-                        autoComplete="new-password" 
-                      />
+                      <Input type={showPassword ? "text" : "password"} placeholder="••••••••" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="pr-10 h-10 sm:h-11 text-sm bg-white" autoComplete="new-password" />
                       <button type="button" className="absolute right-0 top-0 h-full px-3 text-gray-400" onClick={() => setShowPassword(!showPassword)}>
                         {showPassword ? <Eye size={16} className="text-sunset-dark/60"/> : <Lock size={16} className="text-sunset-dark/30" />}
                       </button>
                     </div>
                     {errors.password && <p className="text-xs text-red-500 mt-1 pl-1">{errors.password[0]}</p>}
                   </div>
-
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Role</label>
@@ -374,7 +327,6 @@ export default function UsersPage() {
                         <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
                           <SelectValue placeholder="Select Role" />
                         </SelectTrigger>
-                        {/* 保证下拉菜单不受任何影响，层级提至 10050 */}
                         <SelectContent className="z-[10050]">
                           <SelectItem value="0">SuperAdmin</SelectItem>
                           <SelectItem value="1">Admin</SelectItem>
@@ -383,7 +335,6 @@ export default function UsersPage() {
                         </SelectContent>
                       </Select>
                     </div>
-
                     <div>
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Status</label>
                       <Select value={formData.status} onValueChange={(val) => setFormData({...formData, status: val})}>
@@ -398,11 +349,8 @@ export default function UsersPage() {
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
-
-            {/* Footer */}
             <div className="px-5 sm:px-8 py-4 sm:py-5 border-t border-sunset-primary/10 flex flex-row justify-end items-center gap-3 shrink-0 bg-gray-50/50 rounded-b-3xl sm:rounded-b-[2rem]">
               <Button variant="ghost" className="flex-1 sm:flex-none px-6 h-10 sm:h-11 text-xs sm:text-sm" onClick={() => { setIsAddOpen(false); setEditingUser(null); setShowPassword(false); }}>Cancel</Button>
               <Button onClick={handleSaveUser} disabled={isSaving} className="flex-1 sm:flex-none px-6 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm flex items-center justify-center shadow-md">
@@ -410,7 +358,6 @@ export default function UsersPage() {
                 {isSaving ? "Saving..." : "Save User"}
               </Button>
             </div>
-
           </div>
         </div>
       )}
@@ -440,7 +387,7 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* 主体页面内容 - 动画层（现在已安全包裹在 Modal 之外） */}
+      {/* 主体页面内容 - 动画层 */}
       <div className="space-y-4 sm:space-y-6 animate-in fade-in zoom-in-95 duration-300">
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -455,9 +402,10 @@ export default function UsersPage() {
         </header>
 
         <Card className="p-0 overflow-hidden shadow-xl shadow-orange-500/5 border-2 border-orange-500/20 flex flex-col min-h-0 rounded-[24px]">
-          {/* Toolbar */}
+          
+          {/* Toolbar - 【完美响应式阶梯修复】 */}
           <div className="p-4 sm:p-6 border-b border-orange-500/10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white shrink-0">
-            <div className="relative w-full xl:w-72 shrink-0">
+            <div className="relative w-full xl:w-80 shrink-0">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-sunset-dark/40" size={18} />
               <Input 
                 placeholder="Search users..." 
@@ -469,7 +417,12 @@ export default function UsersPage() {
               />
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full xl:w-auto">
+            {/* 核心修复点：
+                1. 手机端: grid-cols-1
+                2. iPad Mini (sm): sm:grid-cols-2 (一行展示2个，不会因为太窄而挤在一起)
+                3. iPad Pro (lg): lg:grid-cols-3 (屏幕变宽，一行可以装下3个)
+            */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full xl:w-auto xl:flex-1 xl:max-w-3xl xl:justify-end">
               <Select value={filterProvider} onValueChange={(val) => { setFilterProvider(val); setCurrentPage(1); }}>
                 <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
                   <SelectValue placeholder="All Channels" />
@@ -508,8 +461,8 @@ export default function UsersPage() {
             </div>
           </div>
 
-          {/* Mobile View (Cards) */}
-          <div className="md:hidden flex flex-col p-4 gap-4 bg-orange-50/20 max-h-[60vh] overflow-y-auto">
+          {/* Mobile & Tablet Portrait View (Cards) */}
+          <div className="lg:hidden flex flex-col p-4 gap-4 bg-orange-50/20 max-h-[60vh] overflow-y-auto custom-scrollbar">
             {isLoading ? (
               <div className="text-center py-8"><Loader2 className="animate-spin text-orange-500 mx-auto w-8 h-8" /></div>
             ) : users.map((u) => (
@@ -548,17 +501,17 @@ export default function UsersPage() {
             )}
           </div>
 
-          {/* Desktop View */}
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[700px]">
+          {/* Desktop & Tablet Landscape View (Table) */}
+          <div className="hidden lg:block overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse min-w-[850px]">
               <thead>
                 <tr className="bg-gradient-to-r from-orange-500 to-red-500 text-[10px] sm:text-xs font-black text-white uppercase tracking-widest border-b border-orange-500/20">
-                  <th className="p-4 pl-6 whitespace-nowrap w-[23%]">Full Name</th>
-                  <th className="p-4 whitespace-nowrap w-[23%]">Email</th>
-                  <th className="p-4 whitespace-nowrap w-[15%]">Channel</th>
-                  <th className="p-4 whitespace-nowrap w-[18%]">Role</th>
-                  <th className="p-4 whitespace-nowrap w-[11%]">Status</th>
-                  <th className="p-4 text-center pr-6 w-[130px]">Actions</th>
+                  <th className="p-4 pl-6 whitespace-nowrap w-[22%] min-w-[180px]">Full Name</th>
+                  <th className="p-4 whitespace-nowrap w-[25%] min-w-[200px]">Email</th>
+                  <th className="p-4 whitespace-nowrap w-[15%] min-w-[120px]">Channel</th>
+                  <th className="p-4 whitespace-nowrap w-[15%] min-w-[140px]">Role</th>
+                  <th className="p-4 whitespace-nowrap w-[10%] min-w-[100px]">Status</th>
+                  <th className="p-4 text-center pr-6 w-[13%] min-w-[130px]">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-orange-500/10">
