@@ -11,11 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('expenses', function (Blueprint $table) {
+        Schema::create('incomes', function (Blueprint $table) {
             $table->id();
             $table->string('title');
             $table->text('description')->nullable();
-            $table->decimal('price', 10, 2); // 金额，支持两位小数
+            $table->decimal('price', 10, 2); // 统一叫 price 或 amount 都可以，这里对齐前端
             $table->date('date');
             $table->time('time');
             // 存 ID，并建立外键关系 (和 expense 一样)
@@ -30,6 +30,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('expenses');
+        Schema::dropIfExists('incomes');
     }
 };

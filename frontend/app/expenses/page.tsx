@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from "react";
 import { Card, Button, Input, Toast } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Receipt, Clock } from "lucide-react";
+// 引入了 RefreshCw 和 FilterX
+import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Receipt, Clock, RefreshCw, FilterX } from "lucide-react";
 import api from "@/lib/axios";
 
 // ------------------------------------
@@ -87,6 +88,17 @@ export default function ExpensesPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // 清空所有过滤器
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setFilterCategoryId("all");
+    setFilterMethodId("all");
+    setCurrentPage(1);
+    showToast('Filters cleared', 'success');
   };
 
   useEffect(() => {
@@ -386,76 +398,118 @@ export default function ExpensesPage() {
           
           {/* Toolbar */}
           <div className="p-4 sm:p-6 border-b border-orange-500/10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white shrink-0">
-            <div className="relative w-full xl:w-72 shrink-0">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-sunset-dark/40" size={18} />
-              <Input 
-                placeholder="Search expenses..." 
-                className="pl-11 bg-white border border-orange-500/40 hover:border-orange-500 rounded-xl shadow-sm h-11 w-full focus:ring-2 focus:ring-orange-500/30 font-medium transition-all"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                autoComplete="off" 
-              />
+            
+            {/* 搜索框组 (包含移动端/平板的清空与刷新) */}
+            <div className="flex items-center gap-2 w-full xl:w-72 shrink-0">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-sunset-dark/40" size={18} />
+                <Input 
+                  placeholder="Search expenses..." 
+                  className="pl-11 bg-white border border-orange-500/40 hover:border-orange-500 rounded-xl shadow-sm h-11 w-full focus:ring-2 focus:ring-orange-500/30 font-medium transition-all"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)} 
+                  autoComplete="off" 
+                />
+              </div>
+              
+              {/* 只在移动端/平板显示 (`xl:hidden`) */}
+              <button 
+                onClick={handleClearFilters} 
+                className="xl:hidden h-11 px-3 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-xl transition-colors flex items-center justify-center shrink-0 border border-transparent hover:border-red-200" 
+                title="Clear All Filters"
+              >
+                <FilterX size={18} />
+              </button>
+              
+              <button 
+                onClick={fetchExpenses} 
+                className="xl:hidden h-11 px-3 bg-orange-50 text-orange-500 hover:bg-orange-100 hover:text-orange-600 rounded-xl transition-colors flex items-center justify-center shrink-0 border border-transparent hover:border-orange-200" 
+                title="Refresh Table Data"
+              >
+                <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
+              </button>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full xl:w-auto xl:flex-1 xl:max-w-4xl xl:justify-end">
+            {/* 筛选器容器 & 桌面端控制按钮容器 */}
+            <div className="flex flex-col xl:flex-row items-center gap-3 w-full xl:w-auto xl:flex-1 xl:max-w-5xl xl:justify-end">
               
-              {/* 真·日期选择器 Start Date */}
-              <div className="relative flex items-center w-full">
-                <Input 
-                  type="date"
-                  title="Start Date"
-                  className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? 'pr-8' : ''}`}
-                  value={filterStartDate}
-                  onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
-                />
-                {filterStartDate && (
-                  <button 
-                    onClick={() => { setFilterStartDate(""); setCurrentPage(1); }} 
-                    className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full xl:w-auto xl:flex-1">
+                <div className="relative flex items-center w-full">
+                  <Input 
+                    type="date"
+                    title="Start Date"
+                    className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? 'pr-8' : ''}`}
+                    value={filterStartDate}
+                    onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
+                  />
+                  {filterStartDate && (
+                    <button 
+                      onClick={() => { setFilterStartDate(""); setCurrentPage(1); }} 
+                      className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <div className="relative flex items-center w-full">
+                  <Input 
+                    type="date"
+                    title="End Date"
+                    className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? 'pr-8' : ''}`}
+                    value={filterEndDate}
+                    onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
+                  />
+                  {filterEndDate && (
+                    <button 
+                      onClick={() => { setFilterEndDate(""); setCurrentPage(1); }} 
+                      className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                <Select value={filterCategoryId} onValueChange={(val) => { setFilterCategoryId(val); setCurrentPage(1); }}>
+                  <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                    <SelectValue placeholder="All Categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categoryOptions.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterMethodId} onValueChange={(val) => { setFilterMethodId(val); setCurrentPage(1); }}>
+                  <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                    <SelectValue placeholder="All Methods" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Methods</SelectItem>
+                    {methodOptions.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* 真·日期选择器 End Date */}
-              <div className="relative flex items-center w-full">
-                <Input 
-                  type="date"
-                  title="End Date"
-                  className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? 'pr-8' : ''}`}
-                  value={filterEndDate}
-                  onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
-                />
-                {filterEndDate && (
-                  <button 
-                    onClick={() => { setFilterEndDate(""); setCurrentPage(1); }} 
-                    className="absolute right-3 text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+              {/* 【桌面端】：图标按钮完美放置在第四个 Select 的右侧 */}
+              <div className="hidden xl:flex items-center gap-2 shrink-0 pl-1">
+                <button 
+                  onClick={handleClearFilters} 
+                  className="h-11 px-3 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-xl transition-colors flex items-center justify-center shrink-0 border border-transparent hover:border-red-200" 
+                  title="Clear All Filters"
+                >
+                  <FilterX size={18} />
+                </button>
+                
+                <button 
+                  onClick={fetchExpenses} 
+                  className="h-11 px-3 bg-orange-50 text-orange-500 hover:bg-orange-100 hover:text-orange-600 rounded-xl transition-colors flex items-center justify-center shrink-0 border border-transparent hover:border-orange-200" 
+                  title="Refresh Table Data"
+                >
+                  <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
+                </button>
               </div>
 
-              <Select value={filterCategoryId} onValueChange={(val) => { setFilterCategoryId(val); setCurrentPage(1); }}>
-                <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
-                  <SelectValue placeholder="All Categories" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {categoryOptions.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-
-              <Select value={filterMethodId} onValueChange={(val) => { setFilterMethodId(val); setCurrentPage(1); }}>
-                <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
-                  <SelectValue placeholder="All Methods" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Methods</SelectItem>
-                  {methodOptions.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
             </div>
           </div>
 
@@ -507,7 +561,6 @@ export default function ExpensesPage() {
                   <th className="p-4 pl-6 whitespace-nowrap w-[18%] min-w-[150px]">Title</th>
                   <th className="p-4 whitespace-nowrap w-[18%] min-w-[150px]">Description</th>
                   <th className="p-4 whitespace-nowrap w-[14%] min-w-[120px]">Price (RM)</th>
-                  {/* 分离的 Date 和 Time 表头 */}
                   <th className="p-4 whitespace-nowrap w-[10%] min-w-[100px]">Date</th>
                   <th className="p-4 whitespace-nowrap w-[10%] min-w-[100px]">Time</th>
                   <th className="p-4 whitespace-nowrap w-[10%] min-w-[100px]">Method</th>
@@ -518,7 +571,6 @@ export default function ExpensesPage() {
               <tbody className="divide-y divide-orange-500/10">
                 {isLoading ? (
                   <tr>
-                    {/* colSpan 从 7 增加到 8 */}
                     <td colSpan={8} className="p-12 text-center"><Loader2 className="animate-spin text-orange-500 mx-auto w-8 h-8" /></td>
                   </tr>
                 ) : expenses.map((exp) => (
@@ -536,7 +588,6 @@ export default function ExpensesPage() {
                     </td>
                     <td className="p-4 font-black text-red-600 text-lg">RM&nbsp;{parseFloat(exp.price).toFixed(2)}</td>
                     
-                    {/* 分离的 Date 和 Time 单元格 */}
                     <td className="p-4 font-semibold text-sunset-dark/90 text-sm whitespace-nowrap">
                       {exp.date}
                     </td>
@@ -567,7 +618,6 @@ export default function ExpensesPage() {
                 ))}
                 {!isLoading && expenses.length === 0 && (
                   <tr>
-                    {/* colSpan 从 7 增加到 8 */}
                     <td colSpan={8} className="p-12 text-center text-sunset-dark/40 font-medium">No expenses found matching your search.</td>
                   </tr>
                 )}
