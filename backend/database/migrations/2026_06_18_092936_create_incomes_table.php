@@ -13,14 +13,19 @@ return new class extends Migration
     {
         Schema::create('incomes', function (Blueprint $table) {
             $table->id();
+            // 【新增】关联到 users 表
+            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+            
             $table->string('title');
             $table->text('description')->nullable();
-            $table->decimal('price', 10, 2); // 统一叫 price 或 amount 都可以，这里对齐前端
+            $table->decimal('price', 10, 2); 
             $table->date('date');
             $table->time('time');
-            // 存 ID，并建立外键关系 (和 expense 一样)
-            $table->unsignedBigInteger('payment_method_id');
-            $table->unsignedBigInteger('category_id');
+            
+            // 同样建议改为外键约束
+            $table->foreignId('payment_method_id')->constrained('payment_methods')->onDelete('cascade');
+            $table->foreignId('category_id')->constrained('categories')->onDelete('cascade');
+            
             $table->timestamps();
         });
     }

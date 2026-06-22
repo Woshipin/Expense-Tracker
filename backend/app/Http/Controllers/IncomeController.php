@@ -5,12 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\Income;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Validation\Rule;
 
 class IncomeController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Income::with(['category', 'payment_method']);
+        // 仅查询当前用户
+        $query = Income::with(['category', 'payment_method'])
+                       ->where('user_id', auth()->id());
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -53,17 +56,21 @@ class IncomeController extends Controller
             'price' => 'required|numeric|min:0',
             'date' => 'required|date',
             'time' => 'required',
-            'payment_method_id' => 'required|exists:payment_methods,id',
-            'category_id' => 'required|exists:categories,id',
+            // 极高安全防护：必须是该用户自己的 ID
+            'payment_method_id' => ['required', Rule::exists('payment_methods', 'id')->where('user_id', auth()->id())],
+            'category_id' => ['required', Rule::exists('categories', 'id')->where('user_id', auth()->id())],
         ]);
 
-        $income = Income::create($request->all());
+        $data = $request->all();
+        $data['user_id'] = auth()->id();
+
+        $income = Income::create($data);
         return response()->json(['message' => 'Income created', 'data' => $income], 201);
     }
 
     public function update(Request $request, $id)
     {
-        $income = Income::findOrFail($id);
+        $income = Income::where('user_id', auth()->id())->findOrFail($id);
 
         $request->validate([
             'title' => 'required|string|max:255',
@@ -71,8 +78,8 @@ class IncomeController extends Controller
             'price' => 'required|numeric|min:0',
             'date' => 'required|date',
             'time' => 'required',
-            'payment_method_id' => 'required|exists:payment_methods,id',
-            'category_id' => 'required|exists:categories,id',
+            'payment_method_id' => ['required', Rule::exists('payment_methods', 'id')->where('user_id', auth()->id())],
+            'category_id' => ['required', Rule::exists('categories', 'id')->where('user_id', auth()->id())],
         ]);
 
         $income->update($request->all());
@@ -81,7 +88,7 @@ class IncomeController extends Controller
 
     public function destroy($id)
     {
-        $income = Income::findOrFail($id);
+        $income = Income::where('user_id', auth()->id())->findOrFail($id);
         $income->delete();
         return response()->json(['message' => 'Income deleted']);
     }

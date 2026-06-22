@@ -5,15 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\Expense;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Validation\Rule;
 
 class ExpenseController extends Controller
 {
     public function index(Request $request)
     {
-        // 使用 with() 预加载关联，这样返回的 JSON 里就会包含 category 和 payment_method 的详细信息
-        $query = Expense::with(['category', 'payment_method']);
+        // 仅查询当前用户
+        $query = Expense::with(['category', 'payment_method'])
+                        ->where('user_id', auth()->id());
 
-        // 1. 搜索
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -22,24 +23,20 @@ class ExpenseController extends Controller
             });
         }
 
-        // 2. 分类 ID 筛选
         if ($request->filled('category_id') && $request->category_id !== 'all') {
             $query->where('category_id', $request->category_id);
         }
 
-        // 3. 支付方式 ID 筛选
         if ($request->filled('payment_method_id') && $request->payment_method_id !== 'all') {
             $query->where('payment_method_id', $request->payment_method_id);
         }
 
-        // 4. 开始日期
         if ($request->filled('start_date') && $request->start_date !== 'any') {
             if ($request->start_date === 'today') $query->whereDate('date', '>=', Carbon::today());
             elseif ($request->start_date === 'yesterday') $query->whereDate('date', '>=', Carbon::yesterday());
             else $query->whereDate('date', '>=', $request->start_date);
         }
 
-        // 5. 结束日期
         if ($request->filled('end_date') && $request->end_date !== 'any') {
             if ($request->end_date === 'today') $query->whereDate('date', '<=', Carbon::today());
             elseif ($request->end_date === 'yesterday') $query->whereDate('date', '<=', Carbon::yesterday());
@@ -59,18 +56,22 @@ class ExpenseController extends Controller
             'price' => 'required|numeric|min:0',
             'date' => 'required|date',
             'time' => 'required',
-            // 确保存入的 ID 在对应表中存在
-            'payment_method_id' => 'required|exists:payment_methods,id',
-            'category_id' => 'required|exists:categories,id',
+            // 极高安全防护：确保提交的 ID 是存在于数据库中，并且 user_id 是当前登录者的
+            'payment_method_id' => ['required', Rule::exists('payment_methods', 'id')->where('user_id', auth()->id())],
+            'category_id' => ['required', Rule::exists('categories', 'id')->where('user_id', auth()->id())],
         ]);
 
-        $expense = Expense::create($request->all());
+        $data = $request->all();
+        $data['user_id'] = auth()->id(); // 强制绑定
+
+        $expense = Expense::create($data);
         return response()->json(['message' => 'Expense created', 'data' => $expense], 201);
     }
 
     public function update(Request $request, $id)
     {
-        $expense = Expense::findOrFail($id);
+        // 仅能修改自己的账单
+        $expense = Expense::where('user_id', auth()->id())->findOrFail($id);
 
         $request->validate([
             'title' => 'required|string|max:255',
@@ -78,8 +79,8 @@ class ExpenseController extends Controller
             'price' => 'required|numeric|min:0',
             'date' => 'required|date',
             'time' => 'required',
-            'payment_method_id' => 'required|exists:payment_methods,id',
-            'category_id' => 'required|exists:categories,id',
+            'payment_method_id' => ['required', Rule::exists('payment_methods', 'id')->where('user_id', auth()->id())],
+            'category_id' => ['required', Rule::exists('categories', 'id')->where('user_id', auth()->id())],
         ]);
 
         $expense->update($request->all());
@@ -88,7 +89,8 @@ class ExpenseController extends Controller
 
     public function destroy($id)
     {
-        $expense = Expense::findOrFail($id);
+        // 仅能删除自己的账单
+        $expense = Expense::where('user_id', auth()->id())->findOrFail($id);
         $expense->delete();
         return response()->json(['message' => 'Expense deleted']);
     }

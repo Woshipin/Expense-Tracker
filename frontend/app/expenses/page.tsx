@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { Card, Button, Input, Toast } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// 引入了 RefreshCw 和 FilterX
 import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Receipt, Clock, RefreshCw, FilterX } from "lucide-react";
 import api from "@/lib/axios";
 
@@ -30,7 +29,6 @@ export default function ExpensesPage() {
   
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState("");
-  // 将默认值从 "any" 改为空字符串 ""，以配合 type="date"
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("all");
@@ -55,15 +53,23 @@ export default function ExpensesPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 拉取依赖选项 (分类和支付方式)
+  // 【核心修改】：拉取依赖选项并强制过滤为：正常启用(status=1) 且 属于支出型(type_id=1) 的分类和支付方式
   const fetchOptions = async () => {
     try {
       const [catsRes, methodsRes] = await Promise.all([
         api.get('/categories?status=1'), 
         api.get('/payment-methods?status=1')
       ]);
-      setCategoryOptions(catsRes.data.data || catsRes.data || []);
-      setMethodOptions(methodsRes.data.data || methodsRes.data || []);
+      
+      let cats = catsRes.data.data || catsRes.data || [];
+      let methods = methodsRes.data.data || methodsRes.data || [];
+
+      // 强制过滤，确保下拉框只呈现支出对应的数据
+      cats = cats.filter((c: any) => String(c.status) === '1' && String(c.type_id) === '1');
+      methods = methods.filter((m: any) => String(m.status) === '1' && String(m.type_id) === '1');
+
+      setCategoryOptions(cats);
+      setMethodOptions(methods);
     } catch (e) {
       console.error("Failed to load options");
     }
@@ -76,7 +82,6 @@ export default function ExpensesPage() {
       if (searchQuery) params.search = searchQuery;
       if (filterCategoryId !== "all") params.category_id = filterCategoryId;
       if (filterMethodId !== "all") params.payment_method_id = filterMethodId;
-      // 只有当选择了真实的日期时才发送
       if (filterStartDate) params.start_date = filterStartDate;
       if (filterEndDate) params.end_date = filterEndDate;
 
@@ -90,7 +95,6 @@ export default function ExpensesPage() {
     }
   };
 
-  // 清空所有过滤器
   const handleClearFilters = () => {
     setSearchQuery("");
     setFilterStartDate("");
@@ -158,8 +162,11 @@ export default function ExpensesPage() {
       }
       fetchExpenses();
     } catch (error: any) {
-      if (error.response && error.response.status === 422) setErrors(error.response.data.errors);
-      else showToast(error.response?.data?.error || "Operation failed.", "error");
+      if (error.response && error.response.status === 422) {
+        setErrors(error.response.data.errors);
+      } else {
+        showToast(error.response?.data?.message || error.response?.data?.error || "Operation failed.", "error");
+      }
     } finally {
       setIsSaving(false);
     }
@@ -172,7 +179,7 @@ export default function ExpensesPage() {
       setDeletingExpense(null);
       fetchExpenses();
     } catch (error: any) {
-      showToast(error.response?.data?.error || "Failed to delete expense", "error");
+      showToast(error.response?.data?.message || error.response?.data?.error || "Failed to delete expense", "error");
       setDeletingExpense(null);
     }
   };
@@ -204,6 +211,7 @@ export default function ExpensesPage() {
                     </div>
                   </div>
                   <div className="relative z-10 mt-2">
+                    {/* 直接显示原名 */}
                     <h3 className="font-extrabold text-sunset-dark text-xl sm:text-2xl leading-tight">{viewingExpense?.title}</h3>
                     <p className="font-medium text-sunset-dark/60 text-sm mt-2 px-4">{viewingExpense?.description || 'No description provided.'}</p>
                     <div className="mt-4 inline-flex py-1.5 px-4 rounded-xl text-sm font-bold bg-white text-orange-600 border border-orange-200 shadow-sm">
@@ -214,26 +222,27 @@ export default function ExpensesPage() {
 
                 {/* Right Card: Transaction Info */}
                 <div className="bg-slate-50 rounded-2xl sm:rounded-[1.5rem] p-6 border border-slate-100 flex flex-col justify-center h-full">
-                  <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 uppercase tracking-widest flex items-center mb-5 sm:mb-6">
+                  {/* 【修复】：已移除 uppercase 类名，保证格式优美统一 */}
+                  <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center mb-5 sm:mb-6">
                     <Receipt size={18} className="mr-2 text-slate-500" /> Transaction Info
                   </h3>
                   <div className="space-y-4 sm:space-y-6">
                     <div>
-                      <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 uppercase tracking-widest block mb-1.5">Amount</label>
+                      <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 tracking-widest block mb-1.5">Amount</label>
                       <div className="font-black text-3xl text-sunset-dark">RM {parseFloat(viewingExpense?.price).toFixed(2)}</div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 uppercase tracking-widest block mb-1.5">Date</label>
+                        <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 tracking-widest block mb-1.5">Date</label>
                         <div className="font-semibold text-sunset-dark/85 text-sm">{viewingExpense?.date}</div>
                       </div>
                       <div>
-                        <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 uppercase tracking-widest block mb-1.5">Time</label>
+                        <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 tracking-widest block mb-1.5">Time</label>
                         <div className="font-semibold text-sunset-dark/85 text-sm">{viewingExpense?.time}</div>
                       </div>
                     </div>
                     <div>
-                      <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 uppercase tracking-widest block mb-1.5">Payment Method</label>
+                      <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/40 tracking-widest block mb-1.5">Payment Method</label>
                       <span className="inline-flex py-1 px-3 rounded-lg text-xs font-bold bg-slate-200 text-slate-700">
                         {viewingExpense?.payment_method?.name || 'Unknown Method'}
                       </span>
@@ -266,21 +275,22 @@ export default function ExpensesPage() {
                 
                 {/* Left Column */}
                 <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-orange-100 flex flex-col gap-4 sm:gap-5">
-                  <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 uppercase tracking-widest flex items-center">
+                  <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center">
                     <Receipt size={16} className="mr-2 text-orange-500" /> Basic Details
                   </h3>
                   <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Title</label>
+                    {/* 【修复】：硬编码标签去除了所有的 uppercase，实现首字母大写 */}
+                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Title</label>
                     <Input placeholder="E.g. Groceries, Netflix" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" autoComplete="off" />
                     {errors.title && <p className="text-xs text-red-500 mt-1 pl-1">{errors.title[0]}</p>}
                   </div>
                   <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Amount (RM)</label>
+                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Amount (RM)</label>
                     <Input type="number" step="0.01" placeholder="0.00" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="h-10 sm:h-11 text-sm bg-white font-bold" autoComplete="off" />
                     {errors.price && <p className="text-xs text-red-500 mt-1 pl-1">{errors.price[0]}</p>}
                   </div>
                   <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Description (Optional)</label>
+                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Description (Optional)</label>
                     <textarea placeholder="Enter a brief description..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full rounded-xl border border-orange-500/40 focus:border-orange-500 p-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 transition-all custom-scrollbar min-h-[80px]" />
                     {errors.description && <p className="text-xs text-red-500 mt-1 pl-1">{errors.description[0]}</p>}
                   </div>
@@ -288,27 +298,27 @@ export default function ExpensesPage() {
 
                 {/* Right Column */}
                 <div className="bg-slate-50/80 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-slate-200 flex flex-col gap-4 sm:gap-5">
-                  <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 uppercase tracking-widest flex items-center">
+                  <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center">
                     <Clock size={16} className="mr-2 text-slate-500" /> Categorization & Time
                   </h3>
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Date</label>
+                      <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Date</label>
                       <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" />
                       {errors.date && <p className="text-xs text-red-500 mt-1 pl-1">{errors.date[0]}</p>}
                     </div>
                     <div>
-                      <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Time</label>
+                      <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Time</label>
                       <Input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" />
                       {errors.time && <p className="text-xs text-red-500 mt-1 pl-1">{errors.time[0]}</p>}
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Category</label>
+                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Category</label>
                     <Select value={formData.category_id} onValueChange={(val) => setFormData({...formData, category_id: val})}>
-                      <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                      <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
                         <SelectValue placeholder="Select Category" />
                       </SelectTrigger>
                       <SelectContent className="z-[10050]">
@@ -323,9 +333,9 @@ export default function ExpensesPage() {
                   </div>
 
                   <div>
-                    <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Payment Method</label>
+                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Payment Method</label>
                     <Select value={formData.payment_method_id} onValueChange={(val) => setFormData({...formData, payment_method_id: val})}>
-                      <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                      <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
                         <SelectValue placeholder="Select Method" />
                       </SelectTrigger>
                       <SelectContent className="z-[10050]">
@@ -367,7 +377,7 @@ export default function ExpensesPage() {
             </div>
             <div className="p-5 sm:p-8 flex-1 overflow-y-auto">
               <p className="font-medium text-sunset-dark text-sm sm:text-base mb-6">Are you sure you want to delete this expense record? This action cannot be undone.</p>
-              <div className="p-4 sm:p-5 bg-red-50 text-red-700 rounded-2xl sm:rounded-[1.5rem] border border-red-100 font-medium text-center">
+              <div className="p-4 sm:p-5 bg-red-50 text-red-700 rounded-2xl border border-red-100 font-medium text-center">
                 <span className="block text-[10px] sm:text-xs uppercase tracking-widest font-bold opacity-50 mb-1">{deletingExpense?.title}</span>
                 <span className="text-3xl sm:text-4xl font-black block mt-2 tracking-tight">RM {parseFloat(deletingExpense?.price).toFixed(2)}</span>
               </div>
@@ -388,7 +398,7 @@ export default function ExpensesPage() {
             <p className="text-sm font-medium text-sunset-dark/60 mt-1">Detailed view of your outgoing transactions.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all">
+            <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600">
               <Plus size={16} className="mr-1.5 shrink-0" /> Add Expense
             </Button>
           </div>
@@ -557,7 +567,8 @@ export default function ExpensesPage() {
           <div className="hidden lg:block overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse min-w-[950px]">
               <thead>
-                <tr className="bg-gradient-to-r from-orange-500 to-red-500 text-[10px] sm:text-xs font-black text-white uppercase tracking-widest border-b border-orange-500/20">
+                {/* 【修复】：去掉了 uppercase，只保留首字母大写 */}
+                <tr className="bg-gradient-to-r from-orange-500 to-red-500 text-[10px] sm:text-xs font-black text-white border-b border-orange-500/20">
                   <th className="p-4 pl-6 whitespace-nowrap w-[18%] min-w-[150px]">Title</th>
                   <th className="p-4 whitespace-nowrap w-[18%] min-w-[150px]">Description</th>
                   <th className="p-4 whitespace-nowrap w-[14%] min-w-[120px]">Price (RM)</th>
@@ -592,7 +603,7 @@ export default function ExpensesPage() {
                       {exp.date}
                     </td>
                     <td className="p-4">
-                      <span className="inline-flex py-1 px-2 rounded text-[10px] font-bold bg-orange-50 text-orange-700 uppercase tracking-wider whitespace-nowrap">
+                      <span className="inline-flex py-1 px-2 rounded text-[10px] font-bold bg-orange-50 text-orange-700 whitespace-nowrap">
                         {exp.time}
                       </span>
                     </td>
@@ -636,7 +647,7 @@ export default function ExpensesPage() {
                 <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="relative inline-flex items-center rounded-xl bg-white px-3 py-2 text-sm font-bold text-sunset-dark/60 ring-1 ring-inset ring-orange-500/20 hover:bg-orange-50/10 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} /></button>
                 <div className="flex items-center gap-1">
                   {[...Array(totalPages)].map((_, i) => (
-                     <button key={i} onClick={() => setCurrentPage(i + 1)} className={`relative inline-flex items-center justify-center w-9 h-9 rounded-xl text-sm font-bold transition-all ${currentPage === i + 1 ? 'bg-orange-500/10 text-orange-600 ring-1 ring-inset ring-orange-500/30' : 'text-sunset-dark/60 hover:bg-orange-50/10 ring-1 ring-inset ring-orange-500/10'}`}>
+                     <button key={i} onClick={() => setCurrentPage(i + 1)} className={`relative inline-flex items-center justify-center w-9 h-9 rounded-xl text-sm font-bold transition-all ${currentPage === i + 1 ? 'bg-orange-500/10 text-orange-600 border border-orange-500/30' : 'text-sunset-dark/60 hover:bg-orange-50/10 border'}`}>
                        {i + 1}
                      </button>
                   ))}

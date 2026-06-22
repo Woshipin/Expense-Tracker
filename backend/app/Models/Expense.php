@@ -9,7 +9,9 @@ class Expense extends Model
 {
     use HasFactory;
 
+    // 【修改】：加入 user_id 允许批量赋值
     protected $fillable = [
+        'user_id',
         'title',
         'description',
         'price',
@@ -18,6 +20,12 @@ class Expense extends Model
         'payment_method_id', // 改为 ID
         'category_id',       // 改为 ID
     ];
+
+    // 关联：一笔支出属于一个用户
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
     // 关联 Category 模型
     public function category()

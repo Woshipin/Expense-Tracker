@@ -9,7 +9,9 @@ class Income extends Model
 {
     use HasFactory;
 
+    // 【修改】：加入 user_id 允许批量赋值
     protected $fillable = [
+        'user_id',
         'title',
         'description',
         'price',
@@ -18,6 +20,12 @@ class Income extends Model
         'payment_method_id',
         'category_id',
     ];
+
+    // 关联：一笔收入属于一个用户
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function category()
     {

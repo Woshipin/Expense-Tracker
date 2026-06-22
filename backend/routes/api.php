@@ -8,6 +8,7 @@ use App\Http\Controllers\PaymentMethodController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\IncomeController;
+use App\Http\Controllers\CalendarController;
 
 // 公开路由 (无需鉴权)
 Route::post('/register', [AuthController::class, 'register']);
@@ -60,4 +61,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/incomes', [IncomeController::class, 'store']);
     Route::put('/incomes/{id}', [IncomeController::class, 'update']);
     Route::delete('/incomes/{id}', [IncomeController::class, 'destroy']);
+
+    // 【新增】Calendar 路由
+    Route::get('/calendar', [CalendarController::class, 'index']);
 });

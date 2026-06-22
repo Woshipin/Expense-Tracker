@@ -8,10 +8,11 @@ use Illuminate\Validation\Rule;
 
 class CategoryController extends Controller
 {
-    // 获取列表 (搜索 + 状态过滤 + 分页)
+    // 获取列表 (关联加载 type 详情)
     public function index(Request $request)
     {
-        $query = Category::query();
+        // 预加载 type，方便前端识别 Expense 还是 Income
+        $query = Category::with('type')->where('user_id', auth()->id());
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -25,55 +26,70 @@ class CategoryController extends Controller
             $query->where('status', $request->status);
         }
 
-        $categories = $query->orderBy('created_at', 'desc')->paginate(5);
+        $categories = $query->orderBy('created_at', 'desc')->paginate(12); // 每页显示 12 个卡片
 
         return response()->json($categories);
     }
 
-    // 新增
+    // 保存分类 (支持 type_id, icon, color)
     public function store(Request $request)
     {
         $request->validate([
-            'name' => 'required|string|max:255|unique:categories,name',
+            // 联合唯一：同一个用户在同一个收支类型(type_id)下不能有重名的分类
+            'name' => [
+                'required', 'string', 'max:255', 
+                Rule::unique('categories')
+                    ->where('user_id', auth()->id())
+                    ->where('type_id', $request->type_id)
+            ],
+            'type_id' => 'required|exists:types,id', // 验证传入的收支类型必须存在
+            'icon' => 'nullable|string|max:255',
+            'color' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:1000',
             'status' => 'required|in:0,1', 
         ]);
 
-        $category = Category::create($request->only(['name', 'description', 'status']));
+        // 【安全接收】：将新字段 type_id, icon, color 纳入允许接收的数组中
+        $data = $request->only(['name', 'type_id', 'icon', 'color', 'description', 'status']);
+        $data['user_id'] = auth()->id(); // 强制绑定当前用户
+        
+        $category = Category::create($data);
 
-        return response()->json([
-            'message' => 'Category created successfully',
-            'data' => $category
-        ], 201);
+        return response()->json(['message' => 'Category created successfully', 'data' => $category], 201);
     }
 
-    // 更新
+    // 更新分类 (支持 type_id, icon, color)
     public function update(Request $request, $id)
     {
-        $category = Category::findOrFail($id);
+        $category = Category::where('user_id', auth()->id())->findOrFail($id);
 
         $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('categories')->ignore($category->id)],
+            'name' => [
+                'required', 'string', 'max:255', 
+                Rule::unique('categories')
+                    ->where('user_id', auth()->id())
+                    ->where('type_id', $request->type_id)
+                    ->ignore($category->id)
+            ],
+            'type_id' => 'required|exists:types,id',
+            'icon' => 'nullable|string|max:255',
+            'color' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:1000',
             'status' => 'required|in:0,1',
         ]);
 
-        $category->update($request->only(['name', 'description', 'status']));
+        // 【安全接收】
+        $category->update($request->only(['name', 'type_id', 'icon', 'color', 'description', 'status']));
 
-        return response()->json([
-            'message' => 'Category updated successfully',
-            'data' => $category
-        ]);
+        return response()->json(['message' => 'Category updated successfully', 'data' => $category]);
     }
 
-    // 删除
+    // 删除分类
     public function destroy($id)
     {
-        $category = Category::findOrFail($id);
+        $category = Category::where('user_id', auth()->id())->findOrFail($id);
         $category->delete();
 
-        return response()->json([
-            'message' => 'Category deleted successfully'
-        ]);
+        return response()->json(['message' => 'Category deleted successfully']);
     }
 }
