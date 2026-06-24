@@ -9,6 +9,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\BudgetController;
 
 // 公开路由 (无需鉴权)
 Route::post('/register', [AuthController::class, 'register']);
@@ -64,4 +65,11 @@ Route::middleware('auth:api')->group(function () {
 
     // 【新增】Calendar 路由
     Route::get('/calendar', [CalendarController::class, 'index']);
+
+    // 【新增】Budget 路由
+    Route::get('/budget/list',[BudgetController::class,'index']);
+    Route::post('/budget/create',[BudgetController::class,'store']);
+    Route::get('/budget/detail/{id}',[BudgetController::class,'show']);
+    Route::post('/budget/update/{id}',[BudgetController::class,'update']);
+    Route::delete('/budget/delete/{id}',[BudgetController::class,'destroy']);
 });
