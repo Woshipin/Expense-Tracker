@@ -10,6 +10,7 @@ use App\Http\Controllers\ExpenseController;
 use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\TypeController;
 
 // 公开路由 (无需鉴权)
 Route::post('/register', [AuthController::class, 'register']);
@@ -56,6 +57,13 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/expenses', [ExpenseController::class, 'store']);
     Route::put('/expenses/{id}', [ExpenseController::class, 'update']);
     Route::delete('/expenses/{id}', [ExpenseController::class, 'destroy']);
+
+    // Types 管理路由
+    Route::get('/types', [TypeController::class, 'index']);
+    Route::post('/types', [TypeController::class, 'store']);
+    Route::get('/types/{id}', [TypeController::class, 'show']);
+    Route::put('/types/{id}', [TypeController::class, 'update']);
+    Route::delete('/types/{id}', [TypeController::class, 'destroy']);
 
     // Income 管理路由
     Route::get('/incomes', [IncomeController::class, 'index']);

@@ -1,7 +1,8 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, ReceiptText, PieChart, Settings, LogOut, Calendar, DollarSign, BarChart3, MoreHorizontal, ChevronLeft, ChevronRight, Tags, CreditCard, Users, Loader2 } from 'lucide-react';
+// 【修改】在此处引入了 Layers 图标用于 Types
+import { LayoutDashboard, ReceiptText, PieChart, Settings, LogOut, Calendar, DollarSign, BarChart3, MoreHorizontal, ChevronLeft, ChevronRight, Tags, CreditCard, Users, Loader2, Layers } from 'lucide-react';
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Toast } from "@/components/ui";
 import api from "@/lib/axios";
@@ -100,6 +101,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: '/expenses', label: 'Expenses', icon: ReceiptText },
     { id: '/income', label: 'Income', icon: DollarSign },
+    { id: '/types', label: 'Types', icon: Layers },
     { id: '/categories', label: 'Categories', icon: Tags },
     { id: '/payment-methods', label: 'Payment Methods', icon: CreditCard },
     { id: '/users', label: 'Users', icon: Users },
@@ -160,7 +162,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
 
-        <nav className="flex-1 px-4 py-2 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-4 py-2 space-y-2 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
             const isActive = pathname === item.id || (pathname.startsWith(item.id) && item.id !== '/');
             return (
@@ -233,17 +235,17 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             <span className="text-[10px] font-bold">{item.label}</span>
           </button>
         ))}
-        {/* More Menu Toggle */}
+        {/* More Menu Toggle (加入了 /types 检查) */}
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className={cn(
             "flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors",
-            isMobileMenuOpen || ['/categories', '/payment-methods', '/users', '/budget', '/summary', '/profile'].includes(pathname)
+            isMobileMenuOpen || ['/types', '/categories', '/payment-methods', '/users', '/budget', '/summary', '/profile'].includes(pathname)
               ? "text-orange-600"
               : "text-sunset-dark/50 hover:text-orange-500"
           )}
         >
-          <MoreHorizontal size={20} strokeWidth={isMobileMenuOpen || ['/categories', '/payment-methods', '/users', '/budget', '/summary', '/profile'].includes(pathname) ? 2.5 : 2} />
+          <MoreHorizontal size={20} strokeWidth={isMobileMenuOpen || ['/types', '/categories', '/payment-methods', '/users', '/budget', '/summary', '/profile'].includes(pathname) ? 2.5 : 2} />
           <span className="text-[10px] font-bold">More</span>
         </button>
       </div>
@@ -268,6 +270,8 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             </div>
 
             {[
+              // 【新增】Types 到手机端的 More 菜单
+              { id: '/types', label: 'Types', icon: Layers },
               { id: '/categories', label: 'Categories', icon: Tags },
               { id: '/payment-methods', label: 'Payment Methods', icon: CreditCard },
               { id: '/users', label: 'Users', icon: Users },
