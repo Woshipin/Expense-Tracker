@@ -38,6 +38,11 @@ Route::middleware('auth:api')->group(function () {
     // 【新增】Dashboard 路由
     Route::get('/dashboard', [DashboardController::class, 'index']);
 
+    // 获取 AI Insights 动态统计报表
+    Route::get('/ai-insights', [App\Http\Controllers\AiInsightsController::class, 'getInsights']);
+    // AI 财务诊断聊天
+    // Route::post('/ai-insights-chat', [App\Http\Controllers\AiInsightsController::class, 'chat']);
+
     // 【新增】用户管理路由 (仅限管理员访问)
     Route::get('/users', [UserController::class, 'index']);          // 获取用户列表 (查)
     Route::post('/users', [UserController::class, 'store']);         // 新增用户 (增)

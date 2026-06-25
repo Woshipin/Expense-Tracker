@@ -107,7 +107,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/users', label: 'Users', icon: Users },
     { id: '/calendar', label: 'Calendar', icon: Calendar },
     { id: '/budget', label: 'Budget', icon: PieChart },
-    { id: '/summary', label: 'Summary', icon: BarChart3 },
+    { id: '/ai-insights', label: 'AI Insights', icon: BarChart3 },
     { id: '/profile', label: 'Profile', icon: Settings },
   ];
 
@@ -116,6 +116,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/expenses', label: 'Expense', icon: ReceiptText },
     { id: '/income', label: 'Income', icon: DollarSign },
     { id: '/calendar', label: 'Calendar', icon: Calendar },
+    { id: '/ai-insights', label: 'AI Insights', icon: BarChart3 },
   ];
 
   return (
@@ -240,12 +241,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className={cn(
             "flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors",
-            isMobileMenuOpen || ['/types', '/categories', '/payment-methods', '/users', '/budget', '/summary', '/profile'].includes(pathname)
+            isMobileMenuOpen || ['/types', '/categories', '/payment-methods', '/users', '/budget', '/ai-insights', '/profile'].includes(pathname)
               ? "text-orange-600"
               : "text-sunset-dark/50 hover:text-orange-500"
           )}
         >
-          <MoreHorizontal size={20} strokeWidth={isMobileMenuOpen || ['/types', '/categories', '/payment-methods', '/users', '/budget', '/summary', '/profile'].includes(pathname) ? 2.5 : 2} />
+          <MoreHorizontal size={20} strokeWidth={isMobileMenuOpen || ['/types', '/categories', '/payment-methods', '/users', '/budget', '/ai-insights', '/profile'].includes(pathname) ? 2.5 : 2} />
           <span className="text-[10px] font-bold">More</span>
         </button>
       </div>
@@ -276,7 +277,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               { id: '/payment-methods', label: 'Payment Methods', icon: CreditCard },
               { id: '/users', label: 'Users', icon: Users },
               { id: '/budget', label: 'Budget', icon: PieChart },
-              { id: '/summary', label: 'Summary', icon: BarChart3 },
+              { id: '/ai-insights', label: 'AI Insights', icon: BarChart3 },
               { id: '/profile', label: 'Profile', icon: Settings },
             ].map((item) => (
               <button
