@@ -11,6 +11,7 @@ use App\Http\Controllers\IncomeController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\TypeController;
+use App\Http\Controllers\DashboardController;
 
 // 公开路由 (无需鉴权)
 Route::post('/register', [AuthController::class, 'register']);
@@ -33,6 +34,9 @@ Route::middleware('auth:api')->group(function () {
     // 【新增】Profile 相关路由
     Route::put('/profile', [ProfileController::class, 'updateProfile']);
     Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
+
+    // 【新增】Dashboard 路由
+    Route::get('/dashboard', [DashboardController::class, 'index']);
 
     // 【新增】用户管理路由 (仅限管理员访问)
     Route::get('/users', [UserController::class, 'index']);          // 获取用户列表 (查)
