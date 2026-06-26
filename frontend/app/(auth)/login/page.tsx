@@ -186,11 +186,15 @@ export default function LoginPage() {
     }));
   };
 
-  // 真实对接后端的 Laravel Socialite 第三方授权路由
+  // 找到并修改 handleSocialLoginClick 函数：
   const handleSocialLoginClick = (provider: string) => {
     setIsLoading(true);
 
-    window.location.href = `http://localhost:8000/api/auth/${provider.toLowerCase()}`;
+    // 【修改】：使用我们封装好的 api 实例的 baseURL，避免硬编码 localhost
+    const baseURL = api.defaults.baseURL || "http://192.168.0.152:8000/api";
+    
+    // 拼接正确的第三方认证路由（例如：http://192.168.0.152:8000/api/auth/google）
+    window.location.href = `${baseURL}/auth/${provider.toLowerCase()}`;
   };
 
   return (
