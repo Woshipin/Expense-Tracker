@@ -47,6 +47,10 @@ return [
         'redirect' => env('FACEBOOK_REDIRECT_URI'),
     ],
 
+    'groq' => [
+        'api_key' => env('GROQ_API_KEY'),
+    ],
+
     'gemini' => [
         'key' => env('GEMINI_API_KEY'),
     ],
