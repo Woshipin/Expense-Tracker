@@ -101,15 +101,17 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
-  // 【新增核心修复】：组件挂载时，从 LocalStorage 恢复 "Remember Me" 状态和邮箱
+  // 组件挂载时，从 LocalStorage 恢复 "Remember Me" 状态、邮箱和密码
   useEffect(() => {
     const savedEmail = localStorage.getItem("rememberedEmail");
+    const savedPassword = localStorage.getItem("rememberedPassword");
     const isRemembered = localStorage.getItem("isRemembered") === "true";
 
     if (isRemembered && savedEmail) {
       setFormData((prev) => ({
         ...prev,
         email: savedEmail,
+        password: savedEmail ? (savedEmail === "ahpin7762@gmail.com" ? "Pin@776253" : savedPassword || "") : "", // 演示主密码自动填充
         rememberMe: true, // 恢复勾选状态
       }));
     } else {
@@ -134,12 +136,23 @@ export default function LoginPage() {
         rememberMe: formData.rememberMe, 
       });
 
-      // 【新增核心修复】：登录成功后，根据勾选状态更新 LocalStorage
+      // 【核心改进】：
+      // 电脑网站端 (端口号是 3000) 依然保持使用原生的 Cookie 进行鉴权。
+      // 只有在手机原生 App 环境下（检测没有 3000 开发端口）运行时，我们才将 token 保存到 localStorage，启用无缝的 JWT Header 模式。
+      if (response.data && response.data.access_token) {
+        if (typeof window !== "undefined" && window.location.port !== "3000") {
+          localStorage.setItem("auth_token", response.data.access_token);
+        }
+      }
+
+      // 登录成功后，根据勾选状态更新 LocalStorage
       if (formData.rememberMe) {
         localStorage.setItem("rememberedEmail", formData.email);
+        localStorage.setItem("rememberedPassword", formData.password);
         localStorage.setItem("isRemembered", "true");
       } else {
         localStorage.removeItem("rememberedEmail");
+        localStorage.removeItem("rememberedPassword");
         localStorage.setItem("isRemembered", "false");
       }
 
@@ -190,10 +203,7 @@ export default function LoginPage() {
   const handleSocialLoginClick = (provider: string) => {
     setIsLoading(true);
 
-    // 【修改】：使用我们封装好的 api 实例的 baseURL，避免硬编码 localhost
     const baseURL = api.defaults.baseURL || "http://192.168.0.152:8000/api";
-    
-    // 拼接正确的第三方认证路由（例如：http://192.168.0.152:8000/api/auth/google）
     window.location.href = `${baseURL}/auth/${provider.toLowerCase()}`;
   };
 

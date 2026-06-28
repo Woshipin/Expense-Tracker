@@ -6,9 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Receipt, Clock, RefreshCw, FilterX } from "lucide-react";
 import api from "@/lib/axios";
 
-// ------------------------------------
-// 获取首字母缩写用于生成默认图标
-// ------------------------------------
+// 获取首字母缩写
 const getInitials = (name: string) => { 
   return !name ? "EX" : name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2); 
 };
@@ -17,7 +15,6 @@ export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [toast, setToast] = useState<{message:string, type:'success'|'error'|'warning'}|null>(null);
   
-  // 动态选项 (拉取 Categories 和 Payment Methods)
   const [categoryOptions, setCategoryOptions] = useState<any[]>([]);
   const [methodOptions, setMethodOptions] = useState<any[]>([]);
   
@@ -33,6 +30,10 @@ export default function ExpensesPage() {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("all");
   const [filterMethodId, setFilterMethodId] = useState("all");
+
+  // 【新增】：用于解决手机端 Date 占位符空白的焦点状态
+  const [isStartFocused, setIsStartFocused] = useState(false);
+  const [isEndFocused, setIsEndFocused] = useState(false);
 
   // Loading States
   const [isLoading, setIsLoading] = useState(true);
@@ -53,7 +54,6 @@ export default function ExpensesPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 【核心修改】：拉取依赖选项并强制过滤为：正常启用(status=1) 且 属于支出型(type_id=1) 的分类和支付方式
   const fetchOptions = async () => {
     try {
       const [catsRes, methodsRes] = await Promise.all([
@@ -64,7 +64,6 @@ export default function ExpensesPage() {
       let cats = catsRes.data.data || catsRes.data || [];
       let methods = methodsRes.data.data || methodsRes.data || [];
 
-      // 强制过滤，确保下拉框只呈现支出对应的数据
       cats = cats.filter((c: any) => String(c.status) === '1' && String(c.type_id) === '1');
       methods = methods.filter((m: any) => String(m.status) === '1' && String(m.type_id) === '1');
 
@@ -201,8 +200,6 @@ export default function ExpensesPage() {
             
             <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6 items-stretch">
-                
-                {/* Left Card: Main Info */}
                 <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-6 border border-orange-100 flex flex-col items-center justify-center gap-4 text-center h-full relative overflow-hidden">
                   <div className="absolute top-0 w-full h-24 bg-gradient-to-b from-orange-100/50 to-transparent"></div>
                   <div className="relative z-10 shrink-0">
@@ -211,7 +208,6 @@ export default function ExpensesPage() {
                     </div>
                   </div>
                   <div className="relative z-10 mt-2">
-                    {/* 直接显示原名 */}
                     <h3 className="font-extrabold text-sunset-dark text-xl sm:text-2xl leading-tight">{viewingExpense?.title}</h3>
                     <p className="font-medium text-sunset-dark/60 text-sm mt-2 px-4">{viewingExpense?.description || 'No description provided.'}</p>
                     <div className="mt-4 inline-flex py-1.5 px-4 rounded-xl text-sm font-bold bg-white text-orange-600 border border-orange-200 shadow-sm">
@@ -220,9 +216,7 @@ export default function ExpensesPage() {
                   </div>
                 </div>
 
-                {/* Right Card: Transaction Info */}
                 <div className="bg-slate-50 rounded-2xl sm:rounded-[1.5rem] p-6 border border-slate-100 flex flex-col justify-center h-full">
-                  {/* 【修复】：已移除 uppercase 类名，保证格式优美统一 */}
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center mb-5 sm:mb-6">
                     <Receipt size={18} className="mr-2 text-slate-500" /> Transaction Info
                   </h3>
@@ -249,7 +243,6 @@ export default function ExpensesPage() {
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
             <div className="px-5 sm:px-8 py-4 sm:py-5 border-t border-sunset-primary/10 flex justify-end shrink-0 bg-gray-50/50 rounded-b-3xl sm:rounded-b-[2rem]">
@@ -272,14 +265,11 @@ export default function ExpensesPage() {
 
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 items-start">
-                
-                {/* Left Column */}
                 <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-orange-100 flex flex-col gap-4 sm:gap-5">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center">
                     <Receipt size={16} className="mr-2 text-orange-500" /> Basic Details
                   </h3>
                   <div>
-                    {/* 【修复】：硬编码标签去除了所有的 uppercase，实现首字母大写 */}
                     <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Title</label>
                     <Input placeholder="E.g. Groceries, Netflix" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" autoComplete="off" />
                     {errors.title && <p className="text-xs text-red-500 mt-1 pl-1">{errors.title[0]}</p>}
@@ -296,7 +286,6 @@ export default function ExpensesPage() {
                   </div>
                 </div>
 
-                {/* Right Column */}
                 <div className="bg-slate-50/80 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-slate-200 flex flex-col gap-4 sm:gap-5">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center">
                     <Clock size={16} className="mr-2 text-slate-500" /> Categorization & Time
@@ -305,8 +294,7 @@ export default function ExpensesPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Date</label>
-                      <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" />
-                      {errors.date && <p className="text-xs text-red-500 mt-1 pl-1">{errors.date[0]}</p>}
+                      <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-gray-200 focus:border-orange-500 focus:ring-orange-500/20 rounded-xl w-full text-base" />
                     </div>
                     <div>
                       <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Time</label>
@@ -348,9 +336,7 @@ export default function ExpensesPage() {
                     </Select>
                     {errors.payment_method_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.payment_method_id[0]}</p>}
                   </div>
-
                 </div>
-
               </div>
             </div>
 
@@ -408,8 +394,6 @@ export default function ExpensesPage() {
           
           {/* Toolbar */}
           <div className="p-4 sm:p-6 border-b border-orange-500/10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white shrink-0">
-            
-            {/* 搜索框组 (包含移动端/平板的清空与刷新) */}
             <div className="flex items-center gap-2 w-full xl:w-72 shrink-0">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-sunset-dark/40" size={18} />
@@ -422,7 +406,6 @@ export default function ExpensesPage() {
                 />
               </div>
               
-              {/* 只在移动端/平板显示 (`xl:hidden`) */}
               <button 
                 onClick={handleClearFilters} 
                 className="xl:hidden h-11 px-3 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-xl transition-colors flex items-center justify-center shrink-0 border border-transparent hover:border-red-200" 
@@ -440,14 +423,17 @@ export default function ExpensesPage() {
               </button>
             </div>
             
-            {/* 筛选器容器 & 桌面端控制按钮容器 */}
             <div className="flex flex-col xl:flex-row items-center gap-3 w-full xl:w-auto xl:flex-1 xl:max-w-5xl xl:justify-end">
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full xl:w-auto xl:flex-1">
+                
+                {/* 【移动端完美修复】：增加动态类型，当未输入日期且没有焦点时，显示“Start Date”占位提示词 */}
                 <div className="relative flex items-center w-full">
                   <Input 
-                    type="date"
-                    title="Start Date"
+                    type={filterStartDate || isStartFocused ? "date" : "text"}
+                    placeholder="Start Date"
+                    onFocus={() => setIsStartFocused(true)}
+                    onBlur={() => setIsStartFocused(false)}
                     className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? 'pr-8' : ''}`}
                     value={filterStartDate}
                     onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
@@ -462,10 +448,13 @@ export default function ExpensesPage() {
                   )}
                 </div>
 
+                {/* 【移动端完美修复】：增加动态类型，当未输入日期且没有焦点时，显示“End Date”占位提示词 */}
                 <div className="relative flex items-center w-full">
                   <Input 
-                    type="date"
-                    title="End Date"
+                    type={filterEndDate || isEndFocused ? "date" : "text"}
+                    placeholder="End Date"
+                    onFocus={() => setIsEndFocused(true)}
+                    onBlur={() => setIsEndFocused(false)}
                     className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? 'pr-8' : ''}`}
                     value={filterEndDate}
                     onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
@@ -501,7 +490,6 @@ export default function ExpensesPage() {
                 </Select>
               </div>
 
-              {/* 【桌面端】：图标按钮完美放置在第四个 Select 的右侧 */}
               <div className="hidden xl:flex items-center gap-2 shrink-0 pl-1">
                 <button 
                   onClick={handleClearFilters} 
@@ -567,7 +555,6 @@ export default function ExpensesPage() {
           <div className="hidden lg:block overflow-x-auto custom-scrollbar">
             <table className="w-full text-left border-collapse min-w-[950px]">
               <thead>
-                {/* 【修复】：去掉了 uppercase，只保留首字母大写 */}
                 <tr className="bg-gradient-to-r from-orange-500 to-red-500 text-[10px] sm:text-xs font-black text-white border-b border-orange-500/20">
                   <th className="p-4 pl-6 whitespace-nowrap w-[18%] min-w-[150px]">Title</th>
                   <th className="p-4 whitespace-nowrap w-[18%] min-w-[150px]">Description</th>

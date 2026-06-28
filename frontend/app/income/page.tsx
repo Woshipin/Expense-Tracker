@@ -6,16 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Wallet, Clock, RefreshCw, FilterX } from "lucide-react";
 import api from "@/lib/axios";
 
-// ------------------------------------
-// 获取首字母缩写用于生成默认图标
-// ------------------------------------
+// 获取首字母缩写
 const getInitials = (name: string) => { 
   return !name ? "IN" : name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2); 
 };
 
-// ------------------------------------
-// 价格格式化辅助函数：自动删除无意义的 .00
-// ------------------------------------
+// 价格格式化
 const formatPrice = (price: any) => {
   const num = parseFloat(price);
   if (isNaN(num)) return "0";
@@ -26,7 +22,6 @@ export default function IncomePage() {
   const [incomes, setIncomes] = useState<any[]>([]);
   const [toast, setToast] = useState<{message:string, type:'success'|'error'|'warning'}|null>(null);
   
-  // 动态选项
   const [categoryOptions, setCategoryOptions] = useState<any[]>([]);
   const [methodOptions, setMethodOptions] = useState<any[]>([]);
   
@@ -42,6 +37,10 @@ export default function IncomePage() {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("all");
   const [filterMethodId, setFilterMethodId] = useState("all");
+
+  // 【新增】：用于解决手机端 Date 占位符空白的焦点状态
+  const [isStartFocused, setIsStartFocused] = useState(false);
+  const [isEndFocused, setIsEndFocused] = useState(false);
 
   // Loading States
   const [isLoading, setIsLoading] = useState(true);
@@ -62,7 +61,6 @@ export default function IncomePage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 【核心修改】：只显示当前启用的 (status=1) 且属于 收入型 (type_id=2) 的分类和支付方式
   const fetchOptions = async () => {
     try {
       const [catsRes, methodsRes] = await Promise.all([
@@ -73,7 +71,6 @@ export default function IncomePage() {
       let cats = catsRes.data.data || catsRes.data || [];
       let methods = methodsRes.data.data || methodsRes.data || [];
 
-      // 强制过滤
       cats = cats.filter((c: any) => String(c.status) === '1' && String(c.type_id) === '2');
       methods = methods.filter((m: any) => String(m.status) === '1' && String(m.type_id) === '2');
 
@@ -210,8 +207,6 @@ export default function IncomePage() {
             
             <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6 items-stretch">
-                
-                {/* Left Card: Main Info */}
                 <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-6 border border-orange-100 flex flex-col items-center justify-center gap-4 text-center h-full relative overflow-hidden">
                   <div className="absolute top-0 w-full h-24 bg-gradient-to-b from-orange-100/50 to-transparent"></div>
                   <div className="relative z-10 shrink-0">
@@ -228,7 +223,6 @@ export default function IncomePage() {
                   </div>
                 </div>
 
-                {/* Right Card: Transaction Info */}
                 <div className="bg-slate-50 rounded-2xl sm:rounded-[1.5rem] p-6 border border-slate-100 flex flex-col justify-center h-full">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center mb-5 sm:mb-6">
                     <Wallet size={18} className="mr-2 text-slate-500" /> Transaction Info
@@ -256,7 +250,6 @@ export default function IncomePage() {
                     </div>
                   </div>
                 </div>
-
               </div>
             </div>
             <div className="px-5 sm:px-8 py-4 sm:py-5 border-t border-sunset-primary/10 flex justify-end shrink-0 bg-gray-50/50 rounded-b-3xl sm:rounded-b-[2rem]">
@@ -279,8 +272,6 @@ export default function IncomePage() {
 
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 items-start">
-                
-                {/* Left Column */}
                 <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-orange-100 flex flex-col gap-4 sm:gap-5">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center">
                     <Wallet size={16} className="mr-2 text-orange-500" /> Basic Details
@@ -302,7 +293,6 @@ export default function IncomePage() {
                   </div>
                 </div>
 
-                {/* Right Column */}
                 <div className="bg-slate-50/80 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-slate-200 flex flex-col gap-4 sm:gap-5">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center">
                     <Clock size={16} className="mr-2 text-slate-500" /> Categorization & Time
@@ -311,8 +301,7 @@ export default function IncomePage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Date</label>
-                      <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" />
-                      {errors.date && <p className="text-xs text-red-500 mt-1 pl-1">{errors.date[0]}</p>}
+                      <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-gray-200 focus:border-orange-500 focus:ring-orange-500/20 rounded-xl w-full text-base" />
                     </div>
                     <div>
                       <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Time</label>
@@ -354,9 +343,7 @@ export default function IncomePage() {
                     </Select>
                     {errors.payment_method_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.payment_method_id[0]}</p>}
                   </div>
-
                 </div>
-
               </div>
             </div>
 
@@ -414,8 +401,6 @@ export default function IncomePage() {
           
           {/* Toolbar */}
           <div className="p-4 sm:p-6 border-b border-orange-500/10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white shrink-0">
-            
-            {/* 搜索框组 - 在平板/手机端，清空与刷新图标完美放置在右侧且绝不换行 */}
             <div className="flex items-center gap-2 w-full xl:w-72 shrink-0">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-sunset-dark/40" size={18} />
@@ -428,7 +413,6 @@ export default function IncomePage() {
                 />
               </div>
               
-              {/* 【修复】：只在移动端/平板显示 (`xl:hidden`)，iPad Mini 下宽度设为 w-full，整行绝不换行重叠 */}
               <button 
                 onClick={handleClearFilters} 
                 className="xl:hidden h-11 px-3 bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 rounded-xl transition-colors flex items-center justify-center shrink-0 border border-transparent hover:border-red-200" 
@@ -445,14 +429,17 @@ export default function IncomePage() {
               </button>
             </div>
             
-            {/* 筛选器容器 & 桌面端控制按钮容器 */}
             <div className="flex flex-col xl:flex-row items-center gap-3 w-full xl:w-auto xl:flex-1 xl:max-w-5xl xl:justify-end">
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full xl:w-auto xl:flex-1">
+                
+                {/* 【移动端完美修复】：增加动态类型，当未输入日期且没有焦点时，显示“Start Date”占位提示词 */}
                 <div className="relative flex items-center w-full">
                   <Input 
-                    type="date"
-                    title="Start Date"
+                    type={filterStartDate || isStartFocused ? "date" : "text"}
+                    placeholder="Start Date"
+                    onFocus={() => setIsStartFocused(true)}
+                    onBlur={() => setIsStartFocused(false)}
                     className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? 'pr-8' : ''}`}
                     value={filterStartDate}
                     onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
@@ -467,10 +454,13 @@ export default function IncomePage() {
                   )}
                 </div>
 
+                {/* 【移动端完美修复】：增加动态类型，当未输入日期且没有焦点时，显示“End Date”占位提示词 */}
                 <div className="relative flex items-center w-full">
                   <Input 
-                    type="date"
-                    title="End Date"
+                    type={filterEndDate || isEndFocused ? "date" : "text"}
+                    placeholder="End Date"
+                    onFocus={() => setIsEndFocused(true)}
+                    onBlur={() => setIsEndFocused(false)}
                     className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? 'pr-8' : ''}`}
                     value={filterEndDate}
                     onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
@@ -507,7 +497,6 @@ export default function IncomePage() {
 
               </div>
 
-              {/* 【全新添加】在桌面端桌面视图 (`xl:flex`) 下，图标完美移至最右侧，解决 iPad 模拟器下的多余显示 */}
               <div className="hidden xl:flex items-center gap-2 shrink-0 pl-1">
                 <button 
                   onClick={handleClearFilters} 
@@ -603,7 +592,6 @@ export default function IncomePage() {
                       {inc.description || <span className="text-gray-400 italic">N/A</span>}
                     </td>
                     
-                    {/* 【优化】：通过 formatPrice 去掉无意义的 .00 */}
                     <td className="p-4 font-black text-emerald-600 text-lg">RM&nbsp;{formatPrice(inc.price)}</td>
                     
                     <td className="p-4 font-semibold text-sunset-dark/90 text-sm whitespace-nowrap">

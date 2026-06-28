@@ -14,6 +14,10 @@ import api from "@/lib/axios";
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  
+  // 【核心修复】：为服务端渲染提供安全防空保护（如果 pathname 为 null 则默认转为空字符串 ""）
+  const safePathname = pathname || "";
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
@@ -23,43 +27,50 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  const isAuthPage =
-    pathname === "/login" ||
-    pathname === "/register" ||
-    pathname === "/forgot-password" ||
-    pathname === "/reset-password";
-
-  // Auto-expand Settings dropdown if currently on a settings sub-page
+  // 【安全更新】：使用安全路径安全判断，防止 SSR 阶段崩溃
+  const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].includes(safePathname);
+  
   const settingsSubPaths = ['/profile', '/types', '/categories', '/payment-methods'];
-  const isOnSettingsPage = settingsSubPaths.some(p => pathname === p || pathname.startsWith(p));
+  const isOnSettingsPage = settingsSubPaths.some(p => safePathname === p || safePathname.startsWith(p));
 
   useEffect(() => {
     if (isOnSettingsPage) setIsSettingsOpen(true);
   }, [isOnSettingsPage]);
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkAuth = async () => {
       try {
         const response = await api.get('/me');
+        if (!isMounted) return;
+        
         setUser(response.data);
+        
         if (isAuthPage) {
-          setToast({ message: "You are already logged in. Redirecting...", type: "error" });
-          setTimeout(() => { router.push('/dashboard'); }, 1500);
+          router.replace('/dashboard');
         } else {
           setIsCheckingAuth(false);
         }
       } catch (error) {
+        if (!isMounted) return;
+        
         setUser(null);
+        
         if (!isAuthPage) {
-          setToast({ message: "Please login to access this page.", type: "error" });
-          setTimeout(() => { router.push('/login'); }, 1500);
+          router.replace('/login');
         } else {
           setIsCheckingAuth(false);
         }
       }
     };
+
     checkAuth();
-  }, [pathname, router, isAuthPage]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [safePathname, router, isAuthPage]); // 【安全更新】：监听安全路径
 
   const getRoleName = (role: number) => {
     switch (role) {
@@ -77,10 +88,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     } catch (error) {
       console.error("Logout error", error);
     } finally {
+      localStorage.removeItem("auth_token");
       setIsLogoutModalOpen(false);
       setUser(null);
-      setToast({ message: "Logout successful. Redirecting...", type: "success" });
-      setTimeout(() => { router.push('/login'); }, 1500);
+      router.replace('/login');
     }
   };
 
@@ -122,7 +133,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/payment-methods',  label: 'Payment Methods',  icon: CreditCard },
   ];
 
-  // Mobile bottom bar — 5 most important items
   const mobileNavItems = [
     { id: '/dashboard',   label: 'Dash',      icon: LayoutDashboard },
     { id: '/expenses',    label: 'Expenses',  icon: ReceiptText },
@@ -131,25 +141,21 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/budget',      label: 'Budget',    icon: PieChart },
   ];
 
-  // Pages that belong to the "More" overflow menu on mobile
   const moreMenuPaths = ['/users', '/calendar', '/profile', '/types', '/categories', '/payment-methods'];
 
   const isActive = (id: string) =>
-    pathname === id || (pathname.startsWith(id) && id !== '/');
+    safePathname === id || (safePathname.startsWith(id) && id !== '/');
 
   const isSettingsActive = settingsSubItems.some(i => isActive(i.id));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-orange-100 flex selection:bg-sunset-primary/20">
-
-      {/* ================================================================
-          Desktop Sidebar
-      ================================================================ */}
+      
+      {/* Desktop Sidebar */}
       <aside className={cn(
         "hidden md:flex flex-col bg-gradient-to-b from-orange-100/90 via-orange-50/90 to-red-100/90 backdrop-blur-md shadow-[4px_0_24px_rgba(234,88,12,0.08)] border-0 transition-all duration-300 relative z-40",
         isSidebarOpen ? "w-64" : "w-20"
       )}>
-        {/* Logo */}
         <div className="p-6 flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 rounded-[12px] bg-amber-400 text-sunset-dark flex flex-shrink-0 items-center justify-center font-bold text-2xl shadow-sm tracking-tight">+</div>
           {isSidebarOpen && (
@@ -160,7 +166,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           )}
         </div>
 
-        {/* User Card */}
         <div className="px-4 mb-4 shrink-0">
           <div className={cn(
             "rounded-2xl border border-orange-300 bg-white/40 flex items-center transition-all overflow-hidden",
@@ -180,7 +185,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           </div>
         </div>
 
-        {/* Collapse toggle */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="absolute -right-3 top-8 w-6 h-6 bg-white border border-orange-300 rounded-full flex items-center justify-center text-sunset-dark hover:text-orange-500 shadow-sm z-50"
@@ -188,10 +192,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
 
-        {/* Nav */}
         <nav className="px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
-
-          {/* Main nav items */}
           {mainNavItems.map((item) => (
             <button
               key={item.id}
@@ -213,7 +214,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </div>
               {isActive(item.id) && isSidebarOpen && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
 
-              {/* Collapsed tooltip */}
               {!isSidebarOpen && (
                 <div className="absolute left-full ml-4 px-3 py-2 bg-sunset-dark text-white text-sm font-medium rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
                   {item.label}
@@ -222,14 +222,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             </button>
           ))}
 
-          {/* Settings dropdown */}
           <div>
             <button
               onClick={() => {
                 if (isSidebarOpen) {
                   setIsSettingsOpen(prev => !prev);
                 } else {
-                  // When collapsed, just navigate to profile
                   router.push('/profile');
                 }
               }}
@@ -261,7 +259,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               )}
             </button>
 
-            {/* Sub-items */}
             {isSidebarOpen && isSettingsOpen && (
               <div className="mt-1 ml-4 pl-3 border-l-2 border-orange-200 space-y-1">
                 {settingsSubItems.map((item) => (
@@ -290,7 +287,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           </div>
         </nav>
 
-        {/* Logout */}
         <div className="p-4 border-t border-orange-200/50">
           <button
             onClick={() => setIsLogoutModalOpen(true)}
@@ -305,9 +301,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       </aside>
 
-      {/* ================================================================
-          Main Content — fix: remove fixed height, use flex-1 + overflow
-      ================================================================ */}
+      {/* Main Content */}
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden w-full pb-20 md:pb-0">
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 lg:p-10">
           <div className="max-w-7xl mx-auto">
@@ -316,9 +310,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       </main>
 
-      {/* ================================================================
-          Mobile Bottom Navigation Bar
-      ================================================================ */}
+      {/* Mobile Bottom Navigation Bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-black/5 flex items-center justify-around px-2 z-50 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
         {mobileNavItems.map((item) => (
           <button
@@ -338,7 +330,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           </button>
         ))}
 
-        {/* More button */}
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           className={cn(
@@ -356,9 +347,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </button>
       </div>
 
-      {/* ================================================================
-          Mobile More Menu Overlay
-      ================================================================ */}
+      {/* Mobile More Menu Overlay */}
       {isMobileMenuOpen && (
         <div
           className="md:hidden fixed inset-0 bg-sunset-dark/40 backdrop-blur-sm z-40"
@@ -368,7 +357,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             className="absolute bottom-16 right-4 w-64 bg-white rounded-3xl p-3 shadow-2xl border border-sunset-primary/10 animate-in slide-in-from-bottom-5"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* User info */}
             <div className="flex items-center gap-3 bg-gradient-to-br from-orange-50/50 to-red-50/50 p-3 rounded-2xl border border-orange-100 mb-2">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sunset-primary to-sunset-secondary flex items-center justify-center text-white font-bold shrink-0 shadow-sm text-lg uppercase">
                 {user?.full_name ? user.full_name.charAt(0) : 'U'}
@@ -381,7 +369,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </div>
             </div>
 
-            {/* More menu items: Calendar + Users */}
             {[
               { id: '/users',    label: 'Users',    icon: Users },
               { id: '/calendar', label: 'Calendar', icon: Calendar },
@@ -405,7 +392,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </button>
             ))}
 
-            {/* Settings section divider */}
             <div className="my-1.5 mx-2 border-t border-dashed border-orange-100" />
             <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest px-4 pb-1">Settings</p>
 
@@ -429,7 +415,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </button>
             ))}
 
-            {/* Logout */}
             <div className="my-1 border-t border-sunset-primary/5" />
             <button
               onClick={() => { setIsMobileMenuOpen(false); setIsLogoutModalOpen(true); }}
