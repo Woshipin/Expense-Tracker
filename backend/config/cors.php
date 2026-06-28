@@ -24,7 +24,14 @@ return [
     // 【修改】将原来的 ['*'] 改为你的 Next.js 前端地址。
     // 原因：当 supports_credentials 设置为 true 时，浏览器出于安全要求，不允许 allowed_origins 为通配符 '*'。
     // 必须明确指定允许跨域的域名（如果你部署到线上环境，记得把线上的域名也加到这个数组里）。
-    'allowed_origins' => ['http://localhost:3000'],
+    'allowed_origins' => [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://192.168.0.152:3000',   // 家里 Wi-Fi (电脑端浏览器)
+        'http://10.200.242.154:3000',  // 手机个人热点 (电脑端浏览器)
+        'http://localhost',            // 手机原生 App (HTTP 协议)
+        'https://localhost',           // 手机原生 App (HTTPS 协议 - Capacitor WebView)
+    ],
 
     'allowed_origins_patterns' => [],
 

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sunset Tracker - App Assets Generator</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f172a;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            padding: 40px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            text-align: center;
+            max-width: 450px;
+            width: 90%;
+        }
+        h2 {
+            margin-top: 0;
+            color: #f89c8a;
+            font-size: 24px;
+            font-weight: 800;
+        }
+        p {
+            color: #94a3b8;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        button {
+            background: linear-gradient(135deg, #f84d28, #e63f1b);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            font-size: 15px;
+            font-weight: bold;
+            border-radius: 14px;
+            cursor: pointer;
+            margin: 10px 0;
+            width: 100%;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(230, 63, 27, 0.3);
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(230, 63, 27, 0.4);
+        }
+        button:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Sunset Tracker 资源生成器</h2>
+        <p>直接双击打开本网页，点击下方按钮，浏览器就会利用 Canvas 引擎在本地为你实时绘制、导出两张完美的原生 PNG 设计图！</p>
+        
+        <button onclick="generateAndDownload(1024, 'icon.png')">
+            一键下载 icon.png (1024x1024)
+        </button>
+        
+        <button onclick="generateAndDownload(2732, 'splash.png')">
+            一键下载 splash.png (2732x2732)
+        </button>
+    </div>
+
+    <script>
+        // 利用 Canvas 2D 渲染引擎绘制高保真落日 Logo 图像
+        function drawLogo(ctx, cx, cy, r, size) {
+            // 1. 绘制落日渐变背景 (#f89c8a 到 #e63f1b)
+            let gradient = ctx.createLinearGradient(0, 0, 0, size);
+            gradient.addColorStop(0, '#f89c8a');
+            gradient.addColorStop(1, '#e63f1b');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, size, size);
+
+            // 2. 绘制落日半圆 (180度到360度)
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
+            ctx.fillStyle = 'white';
+            ctx.fill();
+
+            // 3. 绘制极简地平线 (带圆角边缘)
+            ctx.beginPath();
+            ctx.lineWidth = r * 0.1;
+            ctx.strokeStyle = 'white';
+            ctx.lineCap = 'round';
+            ctx.moveTo(cx - r * 1.5, cy + (r * 0.05));
+            ctx.lineTo(cx + r * 1.5, cy + (r * 0.05));
+            ctx.stroke();
+
+            // 4. 绘制三条落日发散光芒
+            let angles = [-135, -90, -45];
+            let rayLength = r * 0.35;
+            ctx.lineWidth = r * 0.08;
+            ctx.lineCap = 'round';
+            
+            angles.forEach(angle => {
+                let rad = angle * Math.PI / 180;
+                let x1 = cx + (r * 1.25) * Math.cos(rad);
+                let y1 = cy + (r * 1.25) * Math.sin(rad);
+                let x2 = cx + (r * 1.25 + rayLength) * Math.cos(rad);
+                let y2 = cy + (r * 1.25 + rayLength) * Math.sin(rad);
+                
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+                ctx.lineTo(x2, y2);
+                ctx.stroke();
+            });
+        }
+
+        function generateAndDownload(size, filename) {
+            let canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            let ctx = canvas.getContext('2d');
+            
+            let cx = size / 2;
+            let cy = size / 2;
+            let r = size * 0.22; // 确定合适的设计比例
+            
+            if (filename === 'icon.png') {
+                // 微调 Icon 视觉重心
+                drawLogo(ctx, cx, cy + (size * 0.02), r, size);
+            } else {
+                drawLogo(ctx, cx, cy, r, size);
+            }
+
+            // 唤起浏览器本地无损 PNG 导出与下载
+            let link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
