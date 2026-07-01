@@ -33,6 +33,7 @@ return [
         'http://localhost',            // 安卓端 HTTP
         'https://localhost',           // 安卓原生 App (Capacitor/Flutter HTTPS WebView)
         // 'https://sunsettracker.com', // 【新增这一行】：允许线上正式前端进行跨域访问
+        'http://localhost:8080', // 【新增】允许你的 Flutter Web 跨域访问
     ],
 
     // 智能正则匹配：允许 Flutter Web 调试时产生的随机端口 (如 localhost:53806)
