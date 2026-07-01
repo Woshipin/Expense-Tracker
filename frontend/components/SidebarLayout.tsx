@@ -1,6 +1,5 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
 import {
   LayoutDashboard, ReceiptText, PieChart, Settings, LogOut,
   Calendar, DollarSign, BarChart3, MoreHorizontal, ChevronLeft,
@@ -9,13 +8,13 @@ import {
 } from 'lucide-react';
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Toast } from "@/components/ui";
-import api from "@/lib/axios";
+import api, { findWorkingApiURL } from "@/lib/axios";
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   
-  // 【核心修复】：为服务端渲染提供安全防空保护（如果 pathname 为 null 则默认转为空字符串 ""）
+  // 为服务端渲染提供安全防空保护
   const safePathname = pathname || "";
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -27,7 +26,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // 【安全更新】：使用安全路径安全判断，防止 SSR 阶段崩溃
+  // 判断是否是免鉴权页面
   const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].includes(safePathname);
   
   const settingsSubPaths = ['/profile', '/types', '/categories', '/payment-methods'];
@@ -41,7 +40,15 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     let isMounted = true;
 
     const checkAuth = async () => {
+      // 【核心性能优化】：如果用户已经存在（已登录），且当前不是去登录页，直接无感放行
+      if (user && !isAuthPage) {
+        setIsCheckingAuth(false);
+        return;
+      }
+
       try {
+        await findWorkingApiURL();
+
         const response = await api.get('/me');
         if (!isMounted) return;
         
@@ -70,7 +77,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     return () => {
       isMounted = false;
     };
-  }, [safePathname, router, isAuthPage]); // 【安全更新】：监听安全路径
+  }, [safePathname, router, isAuthPage, user]);
 
   const getRoleName = (role: number) => {
     switch (role) {
@@ -88,10 +95,18 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     } catch (error) {
       console.error("Logout error", error);
     } finally {
+      // 退出时彻底清除本地存留的手机端 Bearer Token
       localStorage.removeItem("auth_token");
       setIsLogoutModalOpen(false);
-      setUser(null);
-      router.replace('/login');
+      
+      // 【修改】：在跳转前先显示成功登出的 Toast
+      setToast({ message: "Logout successful! Redirecting to login...", type: 'success' });
+      
+      // 【修改】：延迟 1.5 秒，让 Toast 完整显示完毕后再执行路由替换与用户态清空
+      setTimeout(() => {
+        setUser(null);
+        router.replace('/login');
+      }, 1500);
     }
   };
 
@@ -152,10 +167,9 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-orange-100 flex selection:bg-sunset-primary/20">
       
       {/* Desktop Sidebar */}
-      <aside className={cn(
-        "hidden md:flex flex-col bg-gradient-to-b from-orange-100/90 via-orange-50/90 to-red-100/90 backdrop-blur-md shadow-[4px_0_24px_rgba(234,88,12,0.08)] border-0 transition-all duration-300 relative z-40",
-        isSidebarOpen ? "w-64" : "w-20"
-      )}>
+      <aside 
+        className={`hidden md:flex flex-col bg-gradient-to-b from-orange-100/90 via-orange-50/90 to-red-100/90 backdrop-blur-md shadow-[4px_0_24px_rgba(234,88,12,0.08)] border-0 transition-all duration-300 relative z-40 ${isSidebarOpen ? "w-64" : "w-20"}`}
+      >
         <div className="p-6 flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 rounded-[12px] bg-amber-400 text-sunset-dark flex flex-shrink-0 items-center justify-center font-bold text-2xl shadow-sm tracking-tight">+</div>
           {isSidebarOpen && (
@@ -167,10 +181,9 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
 
         <div className="px-4 mb-4 shrink-0">
-          <div className={cn(
-            "rounded-2xl border border-orange-300 bg-white/40 flex items-center transition-all overflow-hidden",
-            isSidebarOpen ? "p-3 gap-3" : "justify-center p-2"
-          )}>
+          <div 
+            className={`rounded-2xl border border-orange-300 bg-white/40 flex items-center transition-all overflow-hidden ${isSidebarOpen ? "p-3 gap-3" : "justify-center p-2"}`}
+          >
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#f89c8a] to-red-500 flex items-center justify-center text-white font-bold shrink-0 shadow-sm uppercase">
               {user?.full_name ? user.full_name.charAt(0) : 'U'}
             </div>
@@ -197,18 +210,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             <button
               key={item.id}
               onClick={() => router.push(item.id)}
-              className={cn(
-                "w-full flex items-center justify-between gap-3 rounded-2xl font-bold transition-all duration-200 group relative outline-none",
-                isSidebarOpen ? "px-4 py-3" : "justify-center p-3",
-                isActive(item.id)
-                  ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md"
-                  : "text-black hover:bg-white/50"
-              )}
+              className={`w-full flex items-center justify-between gap-3 rounded-2xl font-bold transition-all duration-200 group relative outline-none ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"} ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-white/50"}`}
             >
               <div className="flex items-center gap-3">
                 <item.icon
                   size={20} strokeWidth={2.5}
-                  className={cn("shrink-0 transition-colors", isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary")}
+                  className={`shrink-0 transition-colors ${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`}
                 />
                 {isSidebarOpen && <span className="whitespace-nowrap">{item.label}</span>}
               </div>
@@ -231,18 +238,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                   router.push('/profile');
                 }
               }}
-              className={cn(
-                "w-full flex items-center justify-between gap-3 rounded-2xl font-bold transition-all duration-200 group relative outline-none",
-                isSidebarOpen ? "px-4 py-3" : "justify-center p-3",
-                isSettingsActive
-                  ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md"
-                  : "text-black hover:bg-white/50"
-              )}
+              className={`w-full flex items-center justify-between gap-3 rounded-2xl font-bold transition-all duration-200 group relative outline-none ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"} ${isSettingsActive ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-white/50"}`}
             >
               <div className="flex items-center gap-3">
                 <Settings
                   size={20} strokeWidth={2.5}
-                  className={cn("shrink-0 transition-colors", isSettingsActive ? "text-white" : "text-black group-hover:text-sunset-primary")}
+                  className={`shrink-0 transition-colors ${isSettingsActive ? "text-white" : "text-black group-hover:text-sunset-primary"}`}
                 />
                 {isSidebarOpen && <span className="whitespace-nowrap">Settings</span>}
               </div>
@@ -265,17 +266,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                   <button
                     key={item.id}
                     onClick={() => router.push(item.id)}
-                    className={cn(
-                      "w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl font-bold transition-all duration-200 group outline-none text-sm",
-                      isActive(item.id)
-                        ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md"
-                        : "text-black hover:bg-white/50"
-                    )}
+                    className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl font-bold transition-all duration-200 group outline-none text-sm ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-white/50"}`}
                   >
                     <div className="flex items-center gap-2.5">
                       <item.icon
                         size={16} strokeWidth={2.5}
-                        className={cn("shrink-0", isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary")}
+                        className={`shrink-0 ${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`}
                       />
                       <span className="whitespace-nowrap">{item.label}</span>
                     </div>
@@ -290,10 +286,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         <div className="p-4 border-t border-orange-200/50">
           <button
             onClick={() => setIsLogoutModalOpen(true)}
-            className={cn(
-              "w-full flex items-center gap-3 rounded-2xl font-bold text-black hover:bg-white/50 hover:text-red-500 transition-all group",
-              isSidebarOpen ? "px-4 py-3" : "justify-center p-3"
-            )}
+            className={`w-full flex items-center gap-3 rounded-2xl font-bold text-black hover:bg-white/50 hover:text-red-500 transition-all group ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"}`}
           >
             <LogOut size={20} className="shrink-0 text-black group-hover:text-red-500 transition-colors" />
             {isSidebarOpen && <span className="whitespace-nowrap">Logout</span>}
@@ -316,15 +309,12 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           <button
             key={item.id}
             onClick={() => router.push(item.id)}
-            className={cn(
-              "flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors",
-              isActive(item.id) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500"
-            )}
+            className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${isActive(item.id) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500"}`}
           >
             <item.icon
               size={20}
               strokeWidth={isActive(item.id) ? 2.5 : 2}
-              className={cn(isActive(item.id) ? "text-orange-600 drop-shadow-sm" : "")}
+              className={isActive(item.id) ? "text-orange-600 drop-shadow-sm" : ""}
             />
             <span className="text-[10px] font-bold">{item.label}</span>
           </button>
@@ -332,12 +322,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
         <button
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className={cn(
-            "flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors",
-            isMobileMenuOpen || moreMenuPaths.some(p => pathname === p || pathname.startsWith(p))
-              ? "text-orange-600"
-              : "text-sunset-dark/50 hover:text-orange-500"
-          )}
+          className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${isMobileMenuOpen || moreMenuPaths.some(p => pathname === p || pathname.startsWith(p)) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500"}`}
         >
           <MoreHorizontal
             size={20}
@@ -376,16 +361,11 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               <button
                 key={item.id}
                 onClick={() => { router.push(item.id); setIsMobileMenuOpen(false); }}
-                className={cn(
-                  "w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl font-bold transition-all duration-200 group",
-                  isActive(item.id)
-                    ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md"
-                    : "text-black hover:bg-orange-50 hover:text-sunset-primary"
-                )}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl font-bold transition-all duration-200 group ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
               >
                 <div className="flex items-center gap-3">
                   <item.icon size={18} strokeWidth={isActive(item.id) ? 2.5 : 2}
-                    className={cn(isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary")} />
+                    className={`${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
                   <span>{item.label}</span>
                 </div>
                 {isActive(item.id) && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
@@ -399,16 +379,11 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               <button
                 key={item.id}
                 onClick={() => { router.push(item.id); setIsMobileMenuOpen(false); }}
-                className={cn(
-                  "w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl font-bold transition-all duration-200 group",
-                  isActive(item.id)
-                    ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md"
-                    : "text-black hover:bg-orange-50 hover:text-sunset-primary"
-                )}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl font-bold transition-all duration-200 group ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
               >
                 <div className="flex items-center gap-3">
                   <item.icon size={18} strokeWidth={isActive(item.id) ? 2.5 : 2}
-                    className={cn(isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary")} />
+                    className={`${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
                   <span>{item.label}</span>
                 </div>
                 {isActive(item.id) && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}

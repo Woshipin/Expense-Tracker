@@ -47,7 +47,7 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
           style={{ animationDelay: "0.1s" }}
         ></div>
         <div
-          className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
+          className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"
           style={{ animationDelay: "0.2s" }}
         ></div>
       </div>
@@ -136,7 +136,6 @@ export default function LoginPage() {
         rememberMe: formData.rememberMe, 
       });
 
-      // 【核心改进】：
       // 电脑网站端 (端口号是 3000) 依然保持使用原生的 Cookie 进行鉴权。
       // 只有在手机原生 App 环境下（检测没有 3000 开发端口）运行时，我们才将 token 保存到 localStorage，启用无缝的 JWT Header 模式。
       if (response.data && response.data.access_token) {
@@ -156,9 +155,10 @@ export default function LoginPage() {
         localStorage.setItem("isRemembered", "false");
       }
 
-      setToast({ message: "Login successful", type: "success" });
+      // 【修改】：展示 1.5 秒的登录成功 Toast 提示
+      setToast({ message: "Login successful! Redirecting...", type: "success" });
 
-      // 等待 1.5 秒后跳转
+      // 【修改】：等待 1.5 秒（即等 Toast 显示完毕后）再跳转至控制台
       setTimeout(() => {
         router.push("/dashboard");
       }, 1500);
@@ -309,18 +309,12 @@ export default function LoginPage() {
                         className="absolute right-0 top-0 h-full px-3.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-r-xl transition-colors"
                         onClick={() => setShowPassword(!showPassword)}
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>
                   {errors.password && (
-                    <p className="text-xs text-red-500 mt-1">
-                      {errors.password[0]}
-                    </p>
+                    <p className="text-xs text-red-500 mt-1">{errors.password[0]}</p>
                   )}
 
                   <div className="flex items-center justify-between pt-2 pb-2">
@@ -426,3 +420,4 @@ export default function LoginPage() {
     </>
   );
 }
+

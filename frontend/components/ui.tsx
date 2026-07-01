@@ -1,10 +1,12 @@
-import { cn } from "@/lib/utils";
 import React from "react";
 import { X, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
 
 export function Card({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("bg-white rounded-3xl p-4 md:p-6 shadow-sm border border-sunset-primary/10", className)} {...props}>
+    <div 
+      className={`bg-white rounded-3xl p-4 md:p-6 shadow-sm border border-sunset-primary/10 ${className || ""}`} 
+      {...props}
+    >
       {children}
     </div>
   );
@@ -18,13 +20,18 @@ export function Button({ className, variant = 'primary', ...props }: React.Butto
     danger: "bg-red-500 text-white hover:bg-red-600 rounded-2xl px-6 py-3 font-semibold transition-colors shadow-lg shadow-red-500/30",
     fab: "bg-sunset-primary text-white hover:bg-sunset-secondary rounded-full p-4 font-semibold transition-colors shadow-lg shadow-sunset-primary/30 flex items-center justify-center",
   };
-  return <button className={cn(variants[variant], className)} {...props} />;
+  return (
+    <button 
+      className={`${variants[variant]} ${className || ""}`} 
+      {...props} 
+    />
+  );
 }
 
 export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input 
-      className={cn("w-full bg-sunset-bg/50 border border-sunset-primary/10 rounded-2xl px-4 py-3 outline-none focus:border-sunset-primary/40 focus:bg-white transition-all text-sunset-dark placeholder:text-sunset-dark/30 font-medium", className)} 
+      className={`w-full bg-sunset-bg/50 border border-sunset-primary/10 rounded-2xl px-4 py-3 outline-none focus:border-sunset-primary/40 focus:bg-white transition-all text-sunset-dark placeholder:text-sunset-dark/30 font-medium ${className || ""}`} 
       {...props} 
     />
   );
@@ -38,12 +45,12 @@ export function Toast({ message, type, onClose }: { message: string, type: 'succ
   };
   const c = config[type];
   return (
-    <div className={cn("fixed top-[15%] left-1/2 -translate-x-1/2 w-[90%] md:w-auto z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border animate-in fade-in zoom-in-95 justify-between", c.bg, c.border)}>
+    <div className={`fixed top-[15%] left-1/2 -translate-x-1/2 w-[90%] md:w-auto z-[100] flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border animate-in fade-in zoom-in-95 justify-between ${c.bg} ${c.border}`}>
       <div className="flex items-center gap-3">
         {c.icon}
-        <span className={cn("text-sm font-bold", c.text)}>{message}</span>
+        <span className={`text-sm font-bold ${c.text}`}>{message}</span>
       </div>
-      <button onClick={onClose} className={cn("p-1 rounded-full opacity-60 hover:opacity-100", c.text)}><X size={16} /></button>
+      <button onClick={onClose} className={`p-1 rounded-full opacity-60 hover:opacity-100 ${c.text}`}><X size={16} /></button>
     </div>
   );
 }
@@ -66,4 +73,3 @@ export function Modal({ isOpen, onClose, title, children }: { isOpen: boolean, o
 }
 
 export * from "./ui/select";
-

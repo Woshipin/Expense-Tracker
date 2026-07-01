@@ -64,6 +64,31 @@ export default function ProfilePage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  /**
+   * 【新增核心转换函数】：
+   * 自动将数据库里保存的旧局域网图片域名，转换为当前正在活跃连接的后端域名，彻底解决切换 Wi-Fi 后头像挂掉的报错！
+   */
+  const getDisplayImageUrl = (path: string | null) => {
+    if (!path) return null;
+    // 如果是 Google / Facebook 等外部三方图片，直接使用
+    if (path.startsWith('http') && !path.includes('localhost') && !path.includes('127.0.0.1') && !path.includes('192.168.') && !path.includes('10.200.')) {
+      return path;
+    }
+    
+    try {
+      // 获取当前正在通信的 Axios 实例基础路由（如 http://192.168.0.152:8000/api）
+      const apiBase = api.defaults.baseURL || "http://127.0.0.1:8000/api";
+      const serverHost = apiBase.replace('/api', ''); // 替换掉 /api 后缀，获取后端主机域名
+      
+      const urlObj = new URL(path);
+      const relativePath = urlObj.pathname; // 获取相对路径（如 /images/xxx.jpg）
+      
+      return `${serverHost}${relativePath}`; // 动态拼接为当前可通的后端地址！
+    } catch (e) {
+      return path;
+    }
+  };
+
   const fetchUser = async () => {
     try {
       const response = await api.get('/me');
@@ -72,7 +97,8 @@ export default function ProfilePage() {
         full_name: response.data.full_name,
         email: response.data.email
       });
-      setImagePreviewState(response.data.image_path || null);
+      // 使用转换器转换旧头像
+      setImagePreviewState(getDisplayImageUrl(response.data.image_path));
     } catch (error) {
       showToast("Failed to load profile data", "error");
     } finally {
@@ -87,7 +113,7 @@ export default function ProfilePage() {
   const openEditModal = () => {
     setErrors({});
     setSelectedFile(null);
-    setImagePreviewState(user?.image_path || null);
+    setImagePreviewState(getDisplayImageUrl(user?.image_path) || null);
     setProfileForm({ full_name: user?.full_name || "", email: user?.email || "" });
     setIsEditProfile(true);
   };
@@ -113,14 +139,12 @@ export default function ProfilePage() {
     setIsSaving(true);
     setErrors({});
     
-    // 使用 FormData 以支持图片上传
     const data = new FormData();
     data.append('full_name', profileForm.full_name);
     data.append('email', profileForm.email);
     if (selectedFile) {
       data.append('image', selectedFile);
     }
-    // Laravel 对于带有 File 的 PUT 请求需要伪造为 POST
     data.append('_method', 'PUT');
 
     try {
@@ -169,13 +193,10 @@ export default function ProfilePage() {
   }
 
   return (
-    // 使用 Fragment 包裹，彻底解决 Z-index 层叠被动画破坏的问题
     <>
       {toast && <div className="fixed top-4 right-4 z-[10000]"><Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /></div>}
       
-      {/* ===============================
-          修改资料 Modal (全端自适应设计，iPad/Mobile绝对居中覆盖)
-      =============================== */}
+      {/* 1. Edit Profile Modal */}
       {isEditProfile && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 pb-20 md:pb-6 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg sm:max-w-xl rounded-3xl sm:rounded-[2rem] shadow-2xl flex flex-col max-h-[calc(100vh-110px)] sm:max-h-[95vh] animate-in zoom-in-95 duration-200 overflow-hidden">
@@ -190,7 +211,6 @@ export default function ProfilePage() {
             <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar flex-1 bg-blue-50/20">
               <div className="space-y-5 sm:space-y-6">
                 
-                {/* 头像上传区域 */}
                 <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 bg-white p-4 sm:p-5 rounded-[1.5rem] border border-blue-100/50 shadow-sm">
                   {imagePreviewState ? (
                     <img src={imagePreviewState} alt="Preview" className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl sm:rounded-[1.5rem] object-cover border-2 border-orange-500/20 shadow-sm shrink-0" />
@@ -247,9 +267,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ===============================
-          修改密码 Modal (全端自适应设计，iPad/Mobile绝对居中覆盖)
-      =============================== */}
+      {/* 2. Change Password Modal */}
       {isChangePassword && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 pb-20 md:pb-6 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg sm:max-w-xl rounded-3xl sm:rounded-[2rem] shadow-2xl flex flex-col max-h-[calc(100vh-110px)] sm:max-h-[95vh] animate-in zoom-in-95 duration-200 overflow-hidden">
@@ -334,7 +352,7 @@ export default function ProfilePage() {
       )}
 
       {/* ===============================
-          主页面内容区 (被包含在动画层内)
+          主页面内容区
       =============================== */}
       <div className="space-y-4 sm:space-y-6 animate-in fade-in zoom-in-95 duration-300 relative z-0 pb-10">
         <header>
@@ -343,15 +361,13 @@ export default function ProfilePage() {
         </header>
 
         <Card className="p-0 overflow-hidden shadow-xl shadow-orange-500/5 border-2 border-orange-500/20 rounded-[24px]">
-          {/* 核心内容区：响应式双列/单列排版 */}
           <div className="flex flex-col lg:flex-row">
              
-             {/* 左侧区域：头像展示 */}
              <div className="p-6 sm:p-10 lg:w-5/12 flex flex-col items-center justify-center bg-gradient-to-b from-orange-50/50 to-white border-b lg:border-b-0 lg:border-r border-orange-500/10">
                 <div className="relative mb-6">
                   {user?.image_path ? (
                     <img 
-                      src={user.image_path} 
+                      src={getDisplayImageUrl(user.image_path) || ""} // 【核心修复】：动态转换旧 IP 为最新可用 IP！
                       alt="Profile Avatar" 
                       className="w-32 h-32 sm:w-40 sm:h-40 rounded-[2rem] sm:rounded-[2.5rem] object-cover shadow-xl border-4 border-white shrink-0"
                       referrerPolicy="no-referrer"
@@ -369,7 +385,6 @@ export default function ProfilePage() {
                 <p className="text-sm font-medium text-sunset-dark/50 mt-1 text-center">{user?.email}</p>
              </div>
 
-             {/* 右侧区域：详细资料 */}
              <div className="p-6 sm:p-10 lg:w-7/12 flex flex-col justify-center gap-6 sm:gap-8 bg-white">
                 
                 <div className="space-y-6">
@@ -402,7 +417,6 @@ export default function ProfilePage() {
              </div>
           </div>
 
-          {/* 底部按钮操作区 */}
           <div className="p-5 sm:p-6 lg:px-10 border-t border-orange-500/10 flex flex-col sm:flex-row gap-3 sm:gap-4 bg-gray-50/50">
             <Button onClick={openEditModal} className="flex-1 py-3 sm:py-6 text-sm shadow-md">
               <User size={18} className="mr-2 inline" /> Edit Profile & Avatar

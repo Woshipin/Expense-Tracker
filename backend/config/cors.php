@@ -26,14 +26,20 @@ return [
     // 必须明确指定允许跨域的域名（如果你部署到线上环境，记得把线上的域名也加到这个数组里）。
     'allowed_origins' => [
         'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://192.168.0.152:3000',   // 家里 Wi-Fi (电脑端浏览器)
-        'http://10.200.242.154:3000',  // 手机个人热点 (电脑端浏览器)
-        'http://localhost',            // 手机原生 App (HTTP 协议)
-        'https://localhost',           // 手机原生 App (HTTPS 协议 - Capacitor WebView)
+        'http://127.0.0.1:3000',       // 【新增这一行】：允许电脑端通过 127.0.0.1 浏览器进行跨域开发
+        'http://192.168.0.152:3000',   // 家里 新山 Wi-Fi (电脑端)
+        'http://192.168.0.132:3000',   // 家里 Ah Wi-Fi (电脑端)
+        'http://10.200.242.154:3000',  // 手机个人热点 (电脑端)
+        'http://localhost',            // 安卓端 HTTP
+        'https://localhost',           // 安卓原生 App (Capacitor/Flutter HTTPS WebView)
+        // 'https://sunsettracker.com', // 【新增这一行】：允许线上正式前端进行跨域访问
     ],
 
-    'allowed_origins_patterns' => [],
+    // 智能正则匹配：允许 Flutter Web 调试时产生的随机端口 (如 localhost:53806)
+    'allowed_origins_patterns' => [
+        '#^http://localhost:\d+$#',
+        '#^http://127\.0\.0\.1:\d+$#'
+    ],
 
     'allowed_headers' => ['*'],
 

@@ -46,7 +46,7 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({
           style={{ animationDelay: "0.1s" }}
         ></div>
         <div
-          className="w-2 h-2 bg-orange-400 rounded-full animate-bounce"
+          className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"
           style={{ animationDelay: "0.2s" }}
         ></div>
       </div>
@@ -93,9 +93,10 @@ export default function RegisterPage() {
         password: formData.password,
       });
 
+      // 【修改】：展示注册成功 1.5 秒的 Toast 提示
       setToast({ message: "Registration successful! Redirecting to login...", type: "success" });
       
-      // 【修改】等待 1.5 秒后跳转
+      // 【修改】：等 1.5s（Toast 显示完后）再进行跳转
       setTimeout(() => {
         router.push("/login");
       }, 1500);
@@ -211,14 +212,12 @@ export default function RegisterPage() {
                 </div>
 
                 {/* Password Settings */}
-                {/* 【修改】将 p-3 改成了 p-5 与上面对齐 */}
                 <div className="bg-emerald-50/50 rounded-2xl p-5 border border-emerald-100/50 relative overflow-hidden">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-100/30 rounded-full blur-xl -translate-y-1/2 translate-x-1/2"></div>
                   <h3 className="text-[14px] font-bold text-gray-700 mb-4 flex items-center relative z-10">
                     <Lock className="h-4 w-4 mr-2 text-emerald-500" />
                     Password Settings
                   </h3>
-                  {/* 【修改】将 space-y-3.5 改成了 space-y-2 与上面对齐 */}
                   <div className="space-y-2 relative z-10">
                     <div className="space-y-1">
                       <label htmlFor="password" className="block text-xs font-semibold text-gray-600 ml-1">Password</label>
