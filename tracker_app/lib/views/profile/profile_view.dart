@@ -41,7 +41,6 @@ class _ProfileViewState extends State<ProfileView> {
   Future<void> _editProfile() async {
     if (_user == null) return;
     
-    // 打开编辑弹窗并获取表单数据（包含图片文件）
     final result = await showDialog<_ProfileFormData>(
       context: context,
       builder: (_) => ProfileFormDialog(user: _user!),
@@ -174,21 +173,23 @@ class _ProfileViewState extends State<ProfileView> {
     ]);
   }
 
-  // ============== 【核心修复：智能修正图片 URL】 ==============
+  // ============== 【核心重构：将请求路由重定向到 /api 跨域通道】 ==============
   String _fixImageUrl(String originalUrl) {
     if (originalUrl.isEmpty || originalUrl == 'null') return '';
 
-    // 获取探测器锁定的当前 API 根路径 (例如 http://192.168.0.132:8000/api)
-    String apiBase = ApiClient().currentBaseUrl;
-    
-    // 提取主机地址部分 (http://192.168.0.132:8000)
-    String hostBase = apiBase.replaceAll('/api', '');
+    try {
+      // 提取文件名 (例如：1782985020_6a4631c2fdc0.jpg)
+      final uri = Uri.parse(originalUrl);
+      final filename = uri.pathSegments.last;
 
-    // 使用正则表达式替换掉原 URL 的主机部分，保留路径 (例如 /images/xxx.jpg)
-    // 无论原数据库存的是 localhost 还是 127.0.0.1，都会被替换为目前通畅的 IP
-    String fixedUrl = originalUrl.replaceFirst(RegExp(r'^http(s)?://[^/]+'), hostBase);
-    
-    return fixedUrl;
+      // 获取探测器锁定的当前 API 根路径 (例如 http://127.0.0.1:8000/api)
+      String apiBase = ApiClient().currentBaseUrl;
+      
+      // 拼接成经过 API 跨域放行代理的专属图片地址
+      return '$apiBase/images/$filename';
+    } catch (_) {
+      return originalUrl;
+    }
   }
   // =========================================================
 
@@ -279,12 +280,16 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     }
   }
 
-  // ============== 【核心修复：同样修正预览时的旧图片 URL】 ==============
   String _fixImageUrl(String originalUrl) {
     if (originalUrl.isEmpty || originalUrl == 'null') return '';
-    String apiBase = ApiClient().currentBaseUrl;
-    String hostBase = apiBase.replaceAll('/api', '');
-    return originalUrl.replaceFirst(RegExp(r'^http(s)?://[^/]+'), hostBase);
+    try {
+      final uri = Uri.parse(originalUrl);
+      final filename = uri.pathSegments.last;
+      String apiBase = ApiClient().currentBaseUrl;
+      return '$apiBase/images/$filename';
+    } catch (_) {
+      return originalUrl;
+    }
   }
 
   Widget _buildAvatarPreview() {

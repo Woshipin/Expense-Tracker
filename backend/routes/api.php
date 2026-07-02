@@ -90,3 +90,6 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/budget/update/{id}',[BudgetController::class,'update']);
     Route::delete('/budget/delete/{id}',[BudgetController::class,'destroy']);
 });
+
+// 建立图片读取的 API 代理路由
+Route::get('/images/{filename}', [App\Http\Controllers\ProfileController::class, 'serveImage']);

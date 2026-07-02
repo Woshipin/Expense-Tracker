@@ -86,4 +86,18 @@ class ProfileController extends Controller
 
         return response()->json(['message' => 'Password changed securely.']);
     }
+
+    /**
+     * API 代理读取并返回图片文件 (自动附加 CORS 头) Flutter Web 调试时，直接访问图片 URL 会被浏览器拦截，提示跨域问题。
+     */
+    public function serveImage($filename)
+    {
+        $path = public_path('images/' . $filename);
+
+        if (!file_exists($path)) {
+            abort(404);
+        }
+
+        return response()->file($path);
+    }
 }
