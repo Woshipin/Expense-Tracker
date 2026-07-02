@@ -3,7 +3,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api/api_client.dart';
 import '../core/constants/colors.dart';
 import '../core/widgets/toast.dart';
+
+import 'categories/category_view.dart';
 import 'dashboard/dashboard_view.dart';
+import 'payment_methods/payment_methods_view.dart';
+import 'profile/profile_view.dart';
+import 'expenses/expenses_view.dart';
+import 'users/users_view.dart';
+import 'types/types_view.dart';
+import 'income/income_view.dart'; // 引入刚刚新建的文件
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -19,34 +27,37 @@ class _MainLayoutState extends State<MainLayout> {
   Map<String, dynamic>? _currentUser;
   bool _isLoadingUser = true;
 
-  final List<Widget> _pages = [
-    const DashboardView(),
-    const Center(child: Text("AI Insights", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Users", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Calendar", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Expenses", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Income", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Budget", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Profile Settings", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Types Settings", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Categories Settings", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-    const Center(child: Text("Payment Methods Settings", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-  ];
+  late final List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
+    _pages = [
+      const DashboardView(), // 0
+      const Center(child: Text("AI Insights", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), // 1
+      const UsersView(), // 2
+      const Center(child: Text("Calendar", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), // 3
+      const ExpenseListView.expenses(), // 4
+      const IncomeView(), // 5   <--- 替换为专用的 IncomeView
+      const Center(child: Text("Budget", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), // 6
+      const ProfileView(), // 7
+      const TypesView(), // 8
+      const CategoryView(), // 9
+      const PaymentMethodsView(), // 10
+    ];
     _fetchUserProfile();
   }
 
   Future<void> _fetchUserProfile() async {
     try {
       final response = await ApiClient().dio.get('/me');
+      if (!mounted) return;
       setState(() {
         _currentUser = response.data;
         _isLoadingUser = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isLoadingUser = false;
       });
@@ -109,14 +120,29 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
+  int _getBottomNavIndex(int index) {
+    switch (index) {
+      case 0: return 0;
+      case 4: return 1;
+      case 5: return 2;
+      case 1: return 3;
+      case 6: return 4;
+      default: return 5;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final String userName = _currentUser?['full_name'] ?? (_isLoadingUser ? 'Loading...' : 'User');
     final String userRole = _getRoleName(_currentUser?['role']);
 
+    if (_currentIndex >= 7 && !_isSettingsExpanded) {
+      _isSettingsExpanded = true;
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        bool isWideScreen = constraints.maxWidth >= 800;
+        bool isWideScreen = constraints.maxWidth >= 650;
 
         if (isWideScreen) {
           return Scaffold(
@@ -235,9 +261,15 @@ class _MainLayoutState extends State<MainLayout> {
           );
         } else {
           return Scaffold(
-            body: _pages[_currentIndex >= 7 ? 0 : _currentIndex],
+            body: SafeArea(
+              top: false,
+              child: IndexedStack(
+                index: _currentIndex,
+                children: _pages,
+              ),
+            ),
             bottomNavigationBar: BottomNavigationBar(
-              currentIndex: _currentIndex >= 7 ? 0 : _currentIndex,
+              currentIndex: _getBottomNavIndex(_currentIndex),
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.white,
               selectedItemColor: SunsetColors.primary,
@@ -320,46 +352,59 @@ class _MainLayoutState extends State<MainLayout> {
   void _showMobileMoreMenu(String userName, String userRole) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true, 
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       builder: (context) {
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 16),
-              
-              Row(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 16,
+            bottom: MediaQuery.of(context).padding.bottom + 16,
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.75,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircleAvatar(
-                    radius: 20,
-                    backgroundColor: SunsetColors.primary.withValues(alpha: 0.1),
-                    child: Text(userName.isNotEmpty ? userName[0].toUpperCase() : 'U', style: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+                  const SizedBox(height: 16),
+                  
+                  Row(
                     children: [
-                      Text(userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      Text(userRole, style: const TextStyle(color: SunsetColors.primary, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: SunsetColors.primary.withValues(alpha: 0.1),
+                        child: Text(userName.isNotEmpty ? userName[0].toUpperCase() : 'U', style: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          Text(userRole, style: const TextStyle(color: SunsetColors.primary, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                        ],
+                      )
                     ],
-                  )
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  
+                  ListTile(dense: true, leading: const Icon(Icons.people_outline, color: SunsetColors.dark), title: const Text("Users", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 2); }),
+                  ListTile(dense: true, leading: const Icon(Icons.calendar_today, color: SunsetColors.dark), title: const Text("Calendar", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 3); }),
+                  ListTile(dense: true, leading: const Icon(Icons.person_outline, color: SunsetColors.dark), title: const Text("Profile Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 7); }),
+                  ListTile(dense: true, leading: const Icon(Icons.layers_outlined, color: SunsetColors.dark), title: const Text("Types Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 8); }),
+                  ListTile(dense: true, leading: const Icon(Icons.sell_outlined, color: SunsetColors.dark), title: const Text("Categories Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 9); }),
+                  ListTile(dense: true, leading: const Icon(Icons.credit_card_outlined, color: SunsetColors.dark), title: const Text("Payment Methods", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 10); }),
+                  const Divider(),
+                  ListTile(dense: true, leading: const Icon(Icons.logout, color: Colors.red), title: const Text("Logout", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); _handleLogout(); }),
                 ],
               ),
-              const SizedBox(height: 12),
-              const Divider(),
-              
-              ListTile(leading: const Icon(Icons.people_outline, color: SunsetColors.dark), title: const Text("Users", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 2); }),
-              ListTile(leading: const Icon(Icons.calendar_today, color: SunsetColors.dark), title: const Text("Calendar", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 3); }),
-              ListTile(leading: const Icon(Icons.person_outline, color: SunsetColors.dark), title: const Text("Profile Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 7); }),
-              ListTile(leading: const Icon(Icons.layers_outlined, color: SunsetColors.dark), title: const Text("Types Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 8); }),
-              ListTile(leading: const Icon(Icons.sell_outlined, color: SunsetColors.dark), title: const Text("Categories Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 9); }),
-              ListTile(leading: const Icon(Icons.credit_card_outlined, color: SunsetColors.dark), title: const Text("Payment Methods", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 10); }),
-              const Divider(),
-              ListTile(leading: const Icon(Icons.logout, color: Colors.red), title: const Text("Logout", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); _handleLogout(); }),
-            ],
+            ),
           ),
         );
       },
