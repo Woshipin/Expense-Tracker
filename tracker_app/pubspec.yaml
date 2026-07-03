@@ -38,6 +38,9 @@ dependencies:
   # 渐变折线图与环形图绘制
   fl_chart: ^0.66.0
 
+  flutter_markdown: ^0.6.18 # 用于解析 AI 返回的 Markdown
+  intl: ^0.19.0          # 用于处理日期格式化
+
   # 图片选择器（用于从电脑/手机本地上传和更新头像）- 新增
   image_picker: ^1.1.2
 

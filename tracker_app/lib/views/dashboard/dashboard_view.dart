@@ -45,13 +45,16 @@ class DashboardView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GridView.count(
+                  // ✅ 完美修复：锁定绝对高度 76px，去除 childAspectRatio 带来的虚高和多余 Padding
+                  GridView(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    crossAxisCount: isDesktop ? 4 : (isTablet ? 2 : 1), 
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: isDesktop ? 2.5 : (isTablet ? 2.2 : 2.8),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: isDesktop ? 4 : (isTablet ? 2 : 1), 
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      mainAxisExtent: 76, // 🌟 核心修改：锁定高度为 76px！消灭一切比例引起的虚高！
+                    ),
                     children: const [
                       MetricCard(title: "BALANCE", value: "-RM 250.00", icon: Icons.account_balance_wallet_outlined, color: SunsetColors.balance),
                       MetricCard(title: "INCOME", value: "RM 10,000.00", icon: Icons.trending_up, color: SunsetColors.income),

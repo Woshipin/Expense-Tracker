@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, Input, Toast } from "@/components/ui";
+import { Card, Toast } from "@/components/ui";
 import { Sparkles, Send, Bot, User, Loader2, ArrowRight, TrendingUp, TrendingDown, Wallet, PiggyBank } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useState, useRef, useEffect } from "react";
@@ -77,8 +77,8 @@ export default function AIInsightsPage() {
   const [input, setInput] = useState("");
   const [isSendingMsg, setIsSendingMsg] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null); 
 
-  // ✅ 新增：normalizeMarkdown — 把单换行转双换行，让 react-markdown 正确渲染段落空行
   const normalizeMarkdown = (text: string) => {
     return text.replace(/([^\n])\n([^\n])/g, '$1\n\n$2');
   };
@@ -191,6 +191,11 @@ Instructions:
     setInput("");
     setIsSendingMsg(true);
 
+    // 发送后重置输入框高度到基础的 44px
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '44px';
+    }
+
     try {
       const response = await api.post("/ai-insights/chat", {
         messages: newMessages,
@@ -211,6 +216,15 @@ Instructions:
       }]);
     } finally {
       setIsSendingMsg(false);
+    }
+  };
+
+  // 处理输入框文字变化，自动调节高度
+  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '44px'; // 先归零到基础高度 44px
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`; // 最大高度约 5 行
     }
   };
 
@@ -253,7 +267,6 @@ Instructions:
         </div>
       ) : (
         <>
-          {/* 1. 四大核心指标卡片 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             <Card className="p-5 border border-purple-100 shadow-sm flex items-center gap-4 bg-white rounded-2xl">
               <div className="w-12 h-12 rounded-2xl bg-[#7c3aed] text-white flex items-center justify-center shrink-0 shadow-md shadow-purple-500/20">
@@ -296,7 +309,6 @@ Instructions:
             </Card>
           </div>
 
-          {/* 2. 可视化面板 */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             <Card className="xl:col-span-2 shadow-sm border border-sunset-primary/10 flex flex-col rounded-2xl p-6 bg-white min-w-0">
               <h3 className="font-bold text-sunset-dark mb-6">Cashflow Overview</h3>
@@ -378,7 +390,6 @@ Instructions:
             </Card>
           </div>
 
-          {/* 3. Recent Transactions + Budget */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             <Card className="p-6 bg-white rounded-2xl shadow-sm border border-sunset-primary/10">
               <div className="flex justify-between items-center mb-6">
@@ -503,14 +514,12 @@ Instructions:
             </Card>
           </div>
 
-          {/* 4. AI Insights 聊天面板 */}
           <div className="mt-4">
             <h3 className="font-black text-sunset-dark flex items-center gap-2 mb-4">
               <Sparkles className="text-sunset-primary animate-pulse" size={20} /> AI Insights Advisor
             </h3>
 
             <Card className="p-0 overflow-hidden shadow-sm border border-sunset-primary/10 flex flex-col bg-white rounded-3xl" style={{ height: '800px' }}>
-              {/* Header */}
               <div className="py-4 bg-sunset-bg relative flex flex-col items-center justify-center border-b border-sunset-primary/10 shrink-0">
                 <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-35">
                   <div className="absolute -top-16 -left-16 w-32 h-32 bg-sunset-primary blur-[50px] rounded-full mix-blend-multiply animate-pulse"></div>
@@ -525,7 +534,6 @@ Instructions:
                 </div>
               </div>
 
-              {/* Messages */}
               <div className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-6 bg-[#fffcfb]">
                 {messages.map((msg, index) => (
                   <div key={index} className={`flex gap-3.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
@@ -534,10 +542,8 @@ Instructions:
                     </div>
                     <div className={`p-4 rounded-2xl max-w-[85%] sm:max-w-[75%] shadow-sm ${msg.role === 'user' ? 'bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white rounded-tr-sm' : 'bg-white border border-orange-200/50 text-sunset-dark rounded-tl-sm'}`}>
                       {msg.role === 'user' ? (
-                        <p className="text-sm font-semibold">{msg.text}</p>
+                        <p className="text-sm font-semibold whitespace-pre-wrap">{msg.text}</p>
                       ) : (
-                        // ✅ 修改：使用 normalizeMarkdown 处理文本，解决单换行不渲染段落空行的问题
-                        // ✅ 修改：prose 样式 — 深黑文字、橙色 bold、段落间距
                         <div className="text-sm font-medium leading-relaxed prose prose-sm max-w-none text-gray-900 prose-headings:text-gray-900 prose-headings:font-black prose-headings:mt-5 prose-headings:mb-3 prose-p:text-gray-900 prose-p:mb-4 prose-p:mt-0 prose-strong:text-sunset-primary prose-strong:font-bold prose-li:text-gray-900 prose-li:my-1 prose-ul:my-3 prose-ol:my-3">
                           <Markdown>{normalizeMarkdown(msg.text)}</Markdown>
                         </div>
@@ -561,25 +567,42 @@ Instructions:
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Input */}
-              <div className="p-4 border-t border-sunset-primary/10 bg-white shrink-0">
-                <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }} className="relative flex items-center">
-                  <Input
-                    placeholder="Ask AI Advisor about your monthly expenses or saving strategy..."
-                    className="w-full p-3 pl-4 pr-12 h-12 bg-[#fffcfb] border-sunset-primary/20 rounded-2xl focus:ring-2 focus:ring-sunset-primary/30 text-sm font-semibold"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    disabled={isSendingMsg}
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSendingMsg || !input.trim()}
-                    className="absolute right-1.5 h-9 w-9 p-0 flex items-center justify-center rounded-xl bg-sunset-primary text-white hover:bg-sunset-dark transition-colors border-none shadow-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <Send size={15} />
-                  </button>
-                </form>
+              {/* ✅ 完美精细修正：纯净 Flex 横排布局，输入框小字体13px，高度精准锁定 44px，同款 10px 微圆角 */}
+              <div className="p-4 border-t border-sunset-primary/10 bg-white shrink-0 flex flex-row items-end gap-3 rounded-b-3xl">
+                <textarea
+                  ref={textareaRef}
+                  placeholder="Ask AI Advisor about your monthly expenses..."
+                  // placeholder:truncate 确保在手机窄屏上提示文字只会显示 ... 而绝对不会换行撑高输入框
+                  className="flex-1 min-h-[44px] max-h-[120px] py-[12px] px-4 bg-[#fffcfb] border border-sunset-primary/20 rounded-[10px] focus:ring-2 focus:ring-sunset-primary/30 outline-none text-[13px] font-semibold resize-none transition-shadow custom-scrollbar leading-[20px] placeholder:truncate overflow-hidden"
+                  value={input}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    if (textareaRef.current) {
+                      textareaRef.current.style.height = '44px'; // 归零到基础高度 44px
+                      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`; // 根据内容延伸，最高120px
+                    }
+                  }}
+                  rows={1}
+                  style={{ height: '44px' }} // 初始强制锁定 44px
+                  disabled={isSendingMsg}
+                  onKeyDown={(e) => {
+                    // 允许按 Enter 发送，Shift+Enter 换行
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleSendMessage}
+                  disabled={isSendingMsg || !input.trim()}
+                  className="shrink-0 h-[44px] w-[44px] flex items-center justify-center rounded-[10px] bg-sunset-primary text-white hover:bg-sunset-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send size={18} />
+                </button>
               </div>
+
             </Card>
           </div>
         </>

@@ -11,7 +11,12 @@ import 'profile/profile_view.dart';
 import 'expenses/expenses_view.dart';
 import 'users/users_view.dart';
 import 'types/types_view.dart';
-import 'income/income_view.dart'; // 引入刚刚新建的文件
+import 'income/income_view.dart';
+
+// 引入子页面
+import 'ai_insights/ai_insights_view.dart';
+import 'budgets/budget_view.dart';
+import 'calendar/calendar_view.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -23,6 +28,7 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
   bool _isSettingsExpanded = false;
+  bool _isSidebarOpen = true; // 控制侧边栏展开/收起
   
   Map<String, dynamic>? _currentUser;
   bool _isLoadingUser = true;
@@ -33,17 +39,17 @@ class _MainLayoutState extends State<MainLayout> {
   void initState() {
     super.initState();
     _pages = [
-      const DashboardView(), // 0
-      const Center(child: Text("AI Insights", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), // 1
-      const UsersView(), // 2
-      const Center(child: Text("Calendar", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), // 3
-      const ExpenseListView.expenses(), // 4
-      const IncomeView(), // 5   <--- 替换为专用的 IncomeView
-      const Center(child: Text("Budget", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))), // 6
-      const ProfileView(), // 7
-      const TypesView(), // 8
-      const CategoryView(), // 9
-      const PaymentMethodsView(), // 10
+      const DashboardView(),              // 0: Dashboard
+      const AiInsightsView(),             // 1: AI Insights
+      const UsersView(),                  // 2: Users
+      const CalendarView(),               // 3: Calendar
+      const ExpenseListView.expenses(),   // 4: Expenses
+      const IncomeView(),                 // 5: Income
+      const BudgetView(),                 // 6: Budget
+      const ProfileView(),                // 7: Profile
+      const TypesView(),                  // 8: Types
+      const CategoryView(),               // 9: Categories
+      const PaymentMethodsView(),         // 10: Payment Methods
     ];
     _fetchUserProfile();
   }
@@ -57,6 +63,7 @@ class _MainLayoutState extends State<MainLayout> {
         _isLoadingUser = false;
       });
     } catch (e) {
+      debugPrint("Fetch User Profile Error: $e");
       if (!mounted) return;
       setState(() {
         _isLoadingUser = false;
@@ -64,9 +71,7 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
-  String _getRoleName(dynamic role) {
-    if (role == null) return "User";
-    int roleId = int.tryParse(role.toString()) ?? 3;
+  String _getRoleName(int roleId) {
     switch (roleId) {
       case 0: return 'SUPER ADMIN';
       case 1: return 'ADMIN';
@@ -120,21 +125,67 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
-  int _getBottomNavIndex(int index) {
-    switch (index) {
-      case 0: return 0;
-      case 4: return 1;
-      case 5: return 2;
-      case 1: return 3;
-      case 6: return 4;
-      default: return 5;
-    }
+  // 🌟 侧边栏切换按钮组件 (纯白背景，橙色边框，微弱阴影)
+  Widget _buildToggleButton({required bool isOpen}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => _isSidebarOpen = !isOpen),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: Colors.white, // 纯白底色
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: SunsetColors.primary, // 橙色边框
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(
+            isOpen ? Icons.chevron_left : Icons.chevron_right, 
+            size: 16, 
+            color: SunsetColors.dark,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final String userName = _currentUser?['full_name'] ?? (_isLoadingUser ? 'Loading...' : 'User');
-    final String userRole = _getRoleName(_currentUser?['role']);
+    if (_isLoadingUser) {
+      return const Scaffold(
+        backgroundColor: SunsetColors.bgStart,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: SunsetColors.primary),
+              SizedBox(height: 20),
+              Text(
+                "Syncing Sunset Tracker...",
+                style: TextStyle(color: SunsetColors.dark, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final String userName = _currentUser?['full_name'] ?? 'User';
+    final int roleId = int.tryParse(_currentUser?['role']?.toString() ?? '3') ?? 3;
+    final String userRole = _getRoleName(roleId);
+
+    final bool canSeeUsers = roleId == 0 || roleId == 1;
+    final bool canSeeAiInsights = roleId == 0 || roleId == 1 || roleId == 2;
 
     if (_currentIndex >= 7 && !_isSettingsExpanded) {
       _isSettingsExpanded = true;
@@ -149,8 +200,11 @@ class _MainLayoutState extends State<MainLayout> {
             backgroundColor: SunsetColors.bgStart,
             body: Row(
               children: [
-                Container(
-                  width: 260,
+                // ---------------- 侧边栏 (Sidebar Desktop) ----------------
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOut,
+                  width: _isSidebarOpen ? 260 : 85, // 控制侧边栏宽度
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFFEE8DB), Color(0xFFFFFaf5)],
@@ -161,38 +215,59 @@ class _MainLayoutState extends State<MainLayout> {
                   ),
                   child: Column(
                     children: [
+                      // 🌟 Logo Header 区域 (智能排版，杜绝溢出)
                       Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40, height: 40,
-                              decoration: BoxDecoration(color: const Color(0xFFFCD34D), borderRadius: BorderRadius.circular(12)),
-                              alignment: Alignment.center,
-                              child: const Text("+", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: SunsetColors.dark)),
-                            ),
-                            const SizedBox(width: 12),
-                            const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("Sunset", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: SunsetColors.dark, height: 1.1)),
-                                Text("EXPENSE TRACKER", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.0)),
-                              ],
-                            )
-                          ],
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
+                        child: _isSidebarOpen
+                            ? Row(
+                                children: [
+                                  Container(
+                                    width: 40, height: 40,
+                                    decoration: BoxDecoration(color: const Color(0xFFFCD34D), borderRadius: BorderRadius.circular(12)),
+                                    alignment: Alignment.center,
+                                    child: const Text("+", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: SunsetColors.dark)),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text("Sunset", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: SunsetColors.dark, height: 1.1)),
+                                        Text("EXPENSE TRACKER", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.0)),
+                                      ],
+                                    ),
+                                  ),
+                                  // 使用精美按钮 (展开状态)
+                                  _buildToggleButton(isOpen: true),
+                                ],
+                              )
+                            : Column(
+                                children: [
+                                  Container(
+                                    width: 40, height: 40,
+                                    decoration: BoxDecoration(color: const Color(0xFFFCD34D), borderRadius: BorderRadius.circular(12)),
+                                    alignment: Alignment.center,
+                                    child: const Text("+", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: SunsetColors.dark)),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  // 使用精美按钮 (收起状态)
+                                  _buildToggleButton(isOpen: false),
+                                ],
+                              ),
                       ),
                       
+                      // 🌟 用户头像区域 (防溢出处理)
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        padding: EdgeInsets.symmetric(horizontal: _isSidebarOpen ? 16.0 : 8.0),
                         child: Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: EdgeInsets.all(_isSidebarOpen ? 12 : 12),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: SunsetColors.border.withValues(alpha: 0.5)),
                           ),
                           child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center, // 无论展开收起都保持居中
                             children: [
                               CircleAvatar(
                                 radius: 18,
@@ -202,16 +277,18 @@ class _MainLayoutState extends State<MainLayout> {
                                   style: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(userName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: SunsetColors.dark), overflow: TextOverflow.ellipsis),
-                                    Text(userRole, style: const TextStyle(fontSize: 9, color: SunsetColors.primary, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
-                                  ],
-                                ),
-                              )
+                              if (_isSidebarOpen) ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(userName, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: SunsetColors.dark), overflow: TextOverflow.ellipsis),
+                                      Text(userRole, style: const TextStyle(fontSize: 9, color: SunsetColors.primary, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
+                                    ],
+                                  ),
+                                )
+                              ]
                             ],
                           ),
                         ),
@@ -223,28 +300,37 @@ class _MainLayoutState extends State<MainLayout> {
                           padding: const EdgeInsets.symmetric(horizontal: 12),
                           children: [
                             _buildSidebarButton(title: "Dashboard", icon: Icons.dashboard_outlined, index: 0),
-                            _buildSidebarButton(title: "AI Insights", icon: Icons.bar_chart, index: 1),
-                            _buildSidebarButton(title: "Users", icon: Icons.people_outline, index: 2),
-                            _buildSidebarButton(title: "Calendar", icon: Icons.calendar_today, index: 3),
+                            if (canSeeUsers) _buildSidebarButton(title: "Users", icon: Icons.people_outline, index: 2),
+                            if (canSeeAiInsights) _buildSidebarButton(title: "AI Insights", icon: Icons.auto_awesome, index: 1),
                             _buildSidebarButton(title: "Expenses", icon: Icons.receipt_long, index: 4),
                             _buildSidebarButton(title: "Income", icon: Icons.attach_money, index: 5),
                             _buildSidebarButton(title: "Budget", icon: Icons.pie_chart_outline, index: 6),
+                            _buildSidebarButton(title: "Calendar", icon: Icons.calendar_today, index: 3),
                             
-                            Theme(
-                              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                              child: ExpansionTile(
-                                leading: const Icon(Icons.settings_outlined, size: 20),
-                                title: const Text("Settings", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                initiallyExpanded: _isSettingsExpanded,
-                                onExpansionChanged: (expanded) => setState(() => _isSettingsExpanded = expanded),
-                                children: [
-                                  _buildSidebarSubButton(title: "Profile", icon: Icons.person_outline, index: 7),
-                                  _buildSidebarSubButton(title: "Types", icon: Icons.layers_outlined, index: 8),
-                                  _buildSidebarSubButton(title: "Categories", icon: Icons.sell_outlined, index: 9),
-                                  _buildSidebarSubButton(title: "Payment Methods", icon: Icons.credit_card_outlined, index: 10),
-                                ],
+                            // 闭合时，设置菜单变成单一按钮。点击后自动展开侧边栏并滑出子菜单
+                            if (!_isSidebarOpen)
+                              _buildSidebarButton(title: "Settings", icon: Icons.settings_outlined, index: 7, onTapOverride: () {
+                                setState(() {
+                                  _isSidebarOpen = true;
+                                  _isSettingsExpanded = true;
+                                });
+                              })
+                            else
+                              Theme(
+                                data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                                child: ExpansionTile(
+                                  leading: const Icon(Icons.settings_outlined, size: 20, color: SunsetColors.dark),
+                                  title: const Text("Settings", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: SunsetColors.dark)),
+                                  initiallyExpanded: _isSettingsExpanded,
+                                  onExpansionChanged: (expanded) => setState(() => _isSettingsExpanded = expanded),
+                                  children: [
+                                    _buildSidebarSubButton(title: "Profile", icon: Icons.person_outline, index: 7),
+                                    _buildSidebarSubButton(title: "Types", icon: Icons.layers_outlined, index: 8),
+                                    _buildSidebarSubButton(title: "Categories", icon: Icons.sell_outlined, index: 9),
+                                    _buildSidebarSubButton(title: "Payment Methods", icon: Icons.credit_card_outlined, index: 10),
+                                  ],
+                                ),
                               ),
-                            ),
                           ],
                         ),
                       ),
@@ -255,11 +341,37 @@ class _MainLayoutState extends State<MainLayout> {
                     ],
                   ),
                 ),
+                // 右侧主内容区
                 Expanded(child: _pages[_currentIndex]),
               ],
             ),
           );
         } else {
+          // ---------------- 手机端 (Mobile View) ----------------
+          List<BottomNavigationBarItem> bottomNavItems = [
+            const BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: "Dash"),
+          ];
+          List<int> bottomNavIndices = [0];
+
+          if (canSeeAiInsights) {
+            bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "AI"));
+            bottomNavIndices.add(1);
+          }
+
+          bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: "Expenses"));
+          bottomNavIndices.add(4);
+
+          bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.attach_money), label: "Income"));
+          bottomNavIndices.add(5);
+
+          bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: "Settings"));
+          bottomNavIndices.add(-1);
+
+          int bottomNavCurrentIndex = bottomNavIndices.indexOf(_currentIndex);
+          if (bottomNavCurrentIndex == -1) {
+            bottomNavCurrentIndex = bottomNavIndices.length - 1;
+          }
+
           return Scaffold(
             body: SafeArea(
               top: false,
@@ -269,7 +381,7 @@ class _MainLayoutState extends State<MainLayout> {
               ),
             ),
             bottomNavigationBar: BottomNavigationBar(
-              currentIndex: _getBottomNavIndex(_currentIndex),
+              currentIndex: bottomNavCurrentIndex,
               type: BottomNavigationBarType.fixed,
               backgroundColor: Colors.white,
               selectedItemColor: SunsetColors.primary,
@@ -277,21 +389,14 @@ class _MainLayoutState extends State<MainLayout> {
               selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
               unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
               onTap: (index) {
-                if (index == 5) {
-                  _showMobileMoreMenu(userName, userRole);
+                int targetIndex = bottomNavIndices[index];
+                if (targetIndex == -1) {
+                  _showMobileSettingsMenu(userName, userRole, canSeeUsers);
                 } else {
-                  final indexMap = [0, 4, 5, 1, 6]; 
-                  setState(() => _currentIndex = indexMap[index]);
+                  setState(() => _currentIndex = targetIndex);
                 }
               },
-              items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: "Dash"),
-                BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: "Expenses"),
-                BottomNavigationBarItem(icon: Icon(Icons.attach_money), label: "Income"),
-                BottomNavigationBarItem(icon: Icon(Icons.bar_chart), label: "AI"),
-                BottomNavigationBarItem(icon: Icon(Icons.pie_chart_outline), label: "Budget"),
-                BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: "More"),
-              ],
+              items: bottomNavItems,
             ),
           );
         }
@@ -299,12 +404,36 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  Widget _buildSidebarButton({required String title, required IconData icon, required int index, Color? color}) {
+  // 🌟 菜单按钮 (展开收起自适应排版)
+  Widget _buildSidebarButton({required String title, required IconData icon, required int index, Color? color, VoidCallback? onTapOverride}) {
     bool isSelected = _currentIndex == index;
+    
+    Widget buttonContent = Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: _isSidebarOpen ? 16 : 0, 
+        vertical: _isSidebarOpen ? 12 : 14 
+      ),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: isSelected ? SunsetColors.primary : Colors.transparent, 
+        borderRadius: BorderRadius.circular(16)
+      ),
+      child: Row(
+        mainAxisAlignment: _isSidebarOpen ? MainAxisAlignment.start : MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 20, color: isSelected ? Colors.white : (color ?? SunsetColors.dark)),
+          if (_isSidebarOpen) ...[
+            const SizedBox(width: 12),
+            Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isSelected ? Colors.white : (color ?? SunsetColors.dark))),
+          ]
+        ],
+      ),
+    );
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2.0),
       child: InkWell(
-        onTap: () {
+        onTap: onTapOverride ?? () {
           if (index == -1) {
             _handleLogout();
           } else {
@@ -312,21 +441,14 @@ class _MainLayoutState extends State<MainLayout> {
           }
         },
         borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(color: isSelected ? SunsetColors.primary : Colors.transparent, borderRadius: BorderRadius.circular(16)),
-          child: Row(
-            children: [
-              Icon(icon, size: 20, color: isSelected ? Colors.white : (color ?? SunsetColors.dark)),
-              const SizedBox(width: 12),
-              Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isSelected ? Colors.white : (color ?? SunsetColors.dark))),
-            ],
-          ),
-        ),
+        child: !_isSidebarOpen 
+            ? Tooltip(message: title, preferBelow: false, child: buttonContent) 
+            : buttonContent,
       ),
     );
   }
 
+  // Desktop Sub Menu Button
   Widget _buildSidebarSubButton({required String title, required IconData icon, required int index}) {
     bool isSelected = _currentIndex == index;
     return Padding(
@@ -349,61 +471,133 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  void _showMobileMoreMenu(String userName, String userRole) {
+  // Mobile Bottom Sheet Button
+  Widget _buildMobileMenuButton({required String title, required IconData icon, required int index, Color? color}) {
+    bool isSelected = _currentIndex == index;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: InkWell(
+        onTap: () {
+          Navigator.pop(context);
+          if (index == -1) {
+            _handleLogout();
+          } else {
+            setState(() => _currentIndex = index);
+          }
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: isSelected ? SunsetColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: isSelected ? Colors.white : (color ?? SunsetColors.dark)),
+              const SizedBox(width: 12),
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isSelected ? Colors.white : (color ?? SunsetColors.dark))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Mobile Bottom Sheet Menu
+  void _showMobileSettingsMenu(String userName, String userRole, bool canSeeUsers) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, 
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent, 
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 16,
-            bottom: MediaQuery.of(context).padding.bottom + 16,
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
           ),
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.75,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                  const SizedBox(height: 16),
-                  
-                  Row(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.88),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.only(left: 24, right: 24, top: 12, bottom: 20),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFFEE8DB), Color(0xFFFFFaf5)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+                    border: Border(bottom: BorderSide(color: Color(0x1AF97316))),
+                  ),
+                  child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundColor: SunsetColors.primary.withValues(alpha: 0.1),
-                        child: Text(userName.isNotEmpty ? userName[0].toUpperCase() : 'U', style: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.bold)),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      Center(child: Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)))),
+                      const SizedBox(height: 24),
+                      Row(
                         children: [
-                          Text(userName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                          Text(userRole, style: const TextStyle(color: SunsetColors.primary, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
+                          Container(
+                            padding: const EdgeInsets.all(3),
+                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))]),
+                            child: CircleAvatar(
+                              radius: 26,
+                              backgroundColor: SunsetColors.primary.withValues(alpha: 0.15),
+                              child: Text(userName.isNotEmpty ? userName[0].toUpperCase() : 'U', style: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.w900, fontSize: 24)),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(userName, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: SunsetColors.dark)),
+                                const SizedBox(height: 2),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(color: SunsetColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+                                  child: Text(userRole, style: const TextStyle(color: SunsetColors.primary, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1.0)),
+                                ),
+                              ],
+                            ),
+                          )
                         ],
-                      )
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  const Divider(),
-                  
-                  ListTile(dense: true, leading: const Icon(Icons.people_outline, color: SunsetColors.dark), title: const Text("Users", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 2); }),
-                  ListTile(dense: true, leading: const Icon(Icons.calendar_today, color: SunsetColors.dark), title: const Text("Calendar", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 3); }),
-                  ListTile(dense: true, leading: const Icon(Icons.person_outline, color: SunsetColors.dark), title: const Text("Profile Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 7); }),
-                  ListTile(dense: true, leading: const Icon(Icons.layers_outlined, color: SunsetColors.dark), title: const Text("Types Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 8); }),
-                  ListTile(dense: true, leading: const Icon(Icons.sell_outlined, color: SunsetColors.dark), title: const Text("Categories Settings", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 9); }),
-                  ListTile(dense: true, leading: const Icon(Icons.credit_card_outlined, color: SunsetColors.dark), title: const Text("Payment Methods", style: TextStyle(fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); setState(() => _currentIndex = 10); }),
-                  const Divider(),
-                  ListTile(dense: true, leading: const Icon(Icons.logout, color: Colors.red), title: const Text("Logout", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)), onTap: () { Navigator.pop(context); _handleLogout(); }),
-                ],
-              ),
+                ),
+                Expanded(
+                  child: ListView(
+                    padding: EdgeInsets.only(top: 16, bottom: MediaQuery.of(context).padding.bottom + 16),
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(left: 32, bottom: 8, top: 4),
+                        child: Text("FEATURES", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                      ),
+                      if (canSeeUsers)
+                        _buildMobileMenuButton(title: "Users", icon: Icons.people_outline, index: 2),
+                      _buildMobileMenuButton(title: "Budget", icon: Icons.pie_chart_outline, index: 6),
+                      _buildMobileMenuButton(title: "Calendar", icon: Icons.calendar_today, index: 3),
+                      
+                      const Padding(padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12), child: Divider(height: 1, color: Color(0xFFF3F4F6))),
+                      
+                      const Padding(
+                        padding: EdgeInsets.only(left: 32, bottom: 8, top: 4),
+                        child: Text("SETTINGS", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
+                      ),
+                      _buildMobileMenuButton(title: "Profile", icon: Icons.person_outline, index: 7),
+                      _buildMobileMenuButton(title: "Types", icon: Icons.layers_outlined, index: 8),
+                      _buildMobileMenuButton(title: "Categories", icon: Icons.sell_outlined, index: 9),
+                      _buildMobileMenuButton(title: "Payment Methods", icon: Icons.credit_card_outlined, index: 10),
+
+                      const Padding(padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12), child: Divider(height: 1, color: Color(0xFFF3F4F6))),
+                      
+                      _buildMobileMenuButton(title: "Logout", icon: Icons.logout, index: -1, color: Colors.red),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         );

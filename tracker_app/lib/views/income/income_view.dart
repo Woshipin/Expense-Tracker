@@ -28,11 +28,10 @@ class _IncomeViewState extends State<IncomeView> {
   int _page = 1;
   int _pages = 1;
 
-  // Income 的专属配置
   final String endpoint = '/incomes';
   final String singular = 'Income';
   final String plural = 'Income';
-  final Color amountColor = const Color(0xFF059669); // 绿色主题
+  final Color amountColor = const Color(0xFF059669); // 绿色
   final int typeId = 2; // 2 代表 Income
 
   @override
@@ -216,118 +215,314 @@ class _IncomeViewState extends State<IncomeView> {
     );
   }
 
+  // ---------------- 智能响应式组件 ----------------
+  InputDecoration _customFilterDecoration(String hint, {IconData? icon}) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13, fontWeight: FontWeight.w500),
+      prefixIcon: icon != null ? Icon(icon, size: 18, color: Colors.grey.shade400) : null,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      filled: true,
+      fillColor: Colors.white,
+      isDense: true,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10), 
+        borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.2), width: 1.5),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5),
+      ),
+    );
+  }
+
+  Widget _customSearchField() => TextField(controller: _search.controller, onChanged: (_) => _search.onChanged(() { _page = 1; _load(); }), decoration: _customFilterDecoration('Search ${plural.toLowerCase()}...', icon: Icons.search));
+  Widget _customDateField(TextEditingController controller, String hint) => TextField(controller: controller, readOnly: true, onTap: () => _selectDateFilter(controller), decoration: _customFilterDecoration(hint));
+  
+  Widget _customDropdown(String value, String hint, List<JsonMap> options, ValueChanged<String> onChanged) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 20),
+      decoration: _customFilterDecoration(hint),
+      items: [
+        DropdownMenuItem(value: 'all', child: Text(hint, style: const TextStyle(fontSize: 13, color: SunsetColors.dark))),
+        ...options.map((item) => DropdownMenuItem(value: '${item['id']}', child: Text(fieldText(item, 'name'), style: const TextStyle(fontSize: 13, color: SunsetColors.dark)))),
+      ],
+      onChanged: (v) { if (v != null) onChanged(v); },
+    );
+  }
+
+  Widget _customIconButton(IconData icon, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10), border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.2), width: 1.5)),
+        child: Icon(icon, size: 22, color: SunsetColors.primary),
+      ),
+    );
+  }
+
+  // ---------------- 构建页面主体 ----------------
   @override
   Widget build(BuildContext context) {
-    final double fw = MediaQuery.of(context).size.width < 700 ? double.infinity : 260;
+    final double width = MediaQuery.of(context).size.width;
+    final bool isMobile = width < 700;
 
     return PageScaffold(
       title: plural,
       subtitle: 'Detailed view of your incoming transactions.',
       action: PrimaryActionButton(label: 'Add $singular', icon: Icons.add, onPressed: () => _save()),
       children: [
-        ToolbarBox(children: [
-          SizedBox(width: fw, child: TextField(controller: _search.controller, onChanged: (_) => _search.onChanged(() { _page = 1; _load(); }), decoration: sunsetFieldDecoration('Search ${plural.toLowerCase()}...', icon: Icons.search))),
-          SizedBox(width: fw, child: TextField(controller: _startDate, readOnly: true, onTap: () => _selectDateFilter(_startDate), decoration: sunsetFieldDecoration('Start Date'))),
-          SizedBox(width: fw, child: TextField(controller: _endDate, readOnly: true, onTap: () => _selectDateFilter(_endDate), decoration: sunsetFieldDecoration('End Date'))),
-          SizedBox(width: fw, child: _optionDropdown(_categoryId, 'All Categories', _categories, (value) { setState(() { _categoryId = value; _page = 1; }); _load(); })),
-          SizedBox(width: fw, child: _optionDropdown(_methodId, 'All Payment Methods', _methods, (value) { setState(() { _methodId = value; _page = 1; }); _load(); })),
-          
-          Row(
-            mainAxisSize: MainAxisSize.min,
+        // 核心：所有视图全部包裹在这个统一的大卡片中
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white, 
+            borderRadius: BorderRadius.circular(24), 
+            border: Border.all(color: Colors.grey.shade100),
+            boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 10, offset: Offset(0, 4))]
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              IconButton.filledTonal(onPressed: _clearFilters, icon: const Icon(Icons.filter_alt_off_outlined), tooltip: 'Clear filters'),
-              const SizedBox(width: 12),
-              IconButton.filledTonal(onPressed: _load, icon: Icon(_loading ? Icons.sync : Icons.refresh), tooltip: 'Refresh'),
+              
+              // 1. 动态过滤区
+              Padding(
+                padding: EdgeInsets.all(isMobile ? 16.0 : 20.0),
+                child: width >= 1100 
+                  ? _buildDesktopFilters() 
+                  : (width >= 700 ? _buildTabletFilters() : _buildMobileFilters()),
+              ),
+              
+              // 2. 数据展示区
+              if (_loading) 
+                const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator(color: SunsetColors.primary)))
+              else if (_items.isEmpty) 
+                Padding(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 48), child: _empty())
+              else 
+                width >= 900 
+                  ? Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: _tableContent()) 
+                  : Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _cardsContent()),
+              
+              // 3. 翻页器
+              if (_items.isNotEmpty)
+                _buildUnifiedPagination(),
             ],
-          )
-        ]),
-        const SizedBox(height: 20),
-        if (_loading) const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator(color: SunsetColors.primary)))
-        else if (_items.isEmpty) _empty()
-        else LayoutBuilder(builder: (context, constraints) {
-          return constraints.maxWidth >= 900 ? _table() : _cards();
-        }),
-        PaginationBar(currentPage: _page, totalPages: _pages, onPage: (page) { setState(() => _page = page); _load(); }),
+          ),
+        )
       ],
     );
   }
 
-  Widget _optionDropdown(String value, String allLabel, List<JsonMap> options, ValueChanged<String> onChanged) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      decoration: sunsetFieldDecoration(allLabel),
-      items: [
-        DropdownMenuItem(value: 'all', child: Text(allLabel)),
-        ...options.map((item) => DropdownMenuItem(value: '${item['id']}', child: Text(fieldText(item, 'name')))),
+  // ---- 3 种屏幕尺寸的过滤器排版 ----
+  Widget _buildDesktopFilters() {
+    return Row(
+      children: [
+        Expanded(flex: 3, child: _customSearchField()),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: _customDateField(_startDate, 'Start Date')),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: _customDateField(_endDate, 'End Date')),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: _customDropdown(_categoryId, 'All Categories', _categories, (value) { setState(() { _categoryId = value; _page = 1; }); _load(); })),
+        const SizedBox(width: 12),
+        Expanded(flex: 2, child: _customDropdown(_methodId, 'All Methods', _methods, (value) { setState(() { _methodId = value; _page = 1; }); _load(); })),
+        const SizedBox(width: 12),
+        _customIconButton(Icons.filter_alt_off_outlined, _clearFilters),
+        const SizedBox(width: 8),
+        _customIconButton(Icons.sync, _load),
       ],
-      onChanged: (value) { if (value != null) onChanged(value); },
     );
   }
 
-  Widget _cards() {
+  Widget _buildTabletFilters() {
+    return Column(
+      children: [
+        Row(children: [ Expanded(child: _customSearchField()), const SizedBox(width: 12), _customIconButton(Icons.filter_alt_off_outlined, _clearFilters), const SizedBox(width: 8), _customIconButton(Icons.sync, _load)]),
+        const SizedBox(height: 12),
+        Row(children: [ Expanded(child: _customDateField(_startDate, 'Start Date')), const SizedBox(width: 12), Expanded(child: _customDateField(_endDate, 'End Date')) ]),
+        const SizedBox(height: 12),
+        Row(children: [ Expanded(child: _customDropdown(_categoryId, 'All Categories', _categories, (value) { setState(() { _categoryId = value; _page = 1; }); _load(); })), const SizedBox(width: 12), Expanded(child: _customDropdown(_methodId, 'All Methods', _methods, (value) { setState(() { _methodId = value; _page = 1; }); _load(); })) ]),
+      ],
+    );
+  }
+
+  Widget _buildMobileFilters() {
+    return Column(
+      children: [
+        _customSearchField(),
+        const SizedBox(height: 12),
+        Row(children: [ Expanded(child: _customDateField(_startDate, 'Start')), const SizedBox(width: 12), Expanded(child: _customDateField(_endDate, 'End')) ]),
+        const SizedBox(height: 12),
+        _customDropdown(_categoryId, 'All Categories', _categories, (value) { setState(() { _categoryId = value; _page = 1; }); _load(); }),
+        const SizedBox(height: 12),
+        _customDropdown(_methodId, 'All Methods', _methods, (value) { setState(() { _methodId = value; _page = 1; }); _load(); }),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            _customIconButton(Icons.filter_alt_off_outlined, _clearFilters),
+            const SizedBox(width: 8),
+            _customIconButton(Icons.sync, _load),
+          ],
+        )
+      ],
+    );
+  }
+
+  // ---- 表格视图 (Desktop) ----
+  Widget _tableContent() {
+    const double colTitle = 240; const double colDesc = 200; const double colPrice = 140;
+    const double colDate = 110; const double colTime = 90; const double colMethod = 120;
+    const double colCategory = 120; const double colActions = 120;
+    const double totalWidth = colTitle + colDesc + colPrice + colDate + colTime + colMethod + colCategory + colActions + 32;
+    const TextStyle headerStyle = TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: const BoxDecoration(color: SunsetColors.primary, borderRadius: BorderRadius.vertical(top: Radius.circular(12))),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            child: SizedBox(
+              width: totalWidth,
+              child: Row(
+                children: const [
+                  SizedBox(width: colTitle, child: Text('Title', style: headerStyle)),
+                  SizedBox(width: colDesc, child: Text('Description', style: headerStyle)),
+                  SizedBox(width: colPrice, child: Text('Amount (RM)', style: headerStyle)),
+                  SizedBox(width: colDate, child: Text('Date', style: headerStyle)),
+                  SizedBox(width: colTime, child: Text('Time', style: headerStyle)),
+                  SizedBox(width: colMethod, child: Text('Method', style: headerStyle)),
+                  SizedBox(width: colCategory, child: Text('Category', style: headerStyle)),
+                  SizedBox(width: colActions, child: Text('Actions', style: headerStyle, textAlign: TextAlign.center)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Container(
+          decoration: BoxDecoration(border: Border(left: BorderSide(color: Colors.grey.shade100), right: BorderSide(color: Colors.grey.shade100), bottom: BorderSide(color: Colors.grey.shade100)), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: totalWidth,
+              child: Column(
+                children: _items.asMap().entries.map((entry) {
+                  final int index = entry.key;
+                  final item = entry.value;
+                  final bool isLast = index == _items.length - 1;
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(border: isLast ? null : Border(bottom: BorderSide(color: Colors.grey.shade100))),
+                    child: Row(
+                      children: [
+                        SizedBox(width: colTitle, child: Row(children: [ Container(width: 36, height: 36, decoration: BoxDecoration(color: SunsetColors.primary, borderRadius: BorderRadius.circular(10)), alignment: Alignment.center, child: Text(initials(fieldText(item, 'title'), 'IN'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))), const SizedBox(width: 12), Expanded(child: Text(fieldText(item, 'title'), style: const TextStyle(fontWeight: FontWeight.bold, color: SunsetColors.dark), overflow: TextOverflow.ellipsis)) ])),
+                        SizedBox(width: colDesc, child: Text(fieldText(item, 'description', 'N/A'), style: TextStyle(color: Colors.grey.shade600, fontSize: 13), overflow: TextOverflow.ellipsis)),
+                        SizedBox(width: colPrice, child: Text('+RM ${money(item['price'])}', style: TextStyle(color: amountColor, fontWeight: FontWeight.w900, fontSize: 14))),
+                        SizedBox(width: colDate, child: Text(fieldText(item, 'date'), style: const TextStyle(fontWeight: FontWeight.w600, color: SunsetColors.dark, fontSize: 13))),
+                        SizedBox(width: colTime, child: Text(fieldText(item, 'time'), style: const TextStyle(fontWeight: FontWeight.w600, color: SunsetColors.dark, fontSize: 13))),
+                        SizedBox(width: colMethod, child: Align(alignment: Alignment.centerLeft, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), child: Text(nestedText(item, 'payment_method', 'name'), style: const TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold))))),
+                        SizedBox(width: colCategory, child: Align(alignment: Alignment.centerLeft, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(6)), child: Text(nestedText(item, 'category', 'name'), style: const TextStyle(color: SunsetColors.primary, fontSize: 11, fontWeight: FontWeight.bold))))),
+                        SizedBox(width: colActions, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [ InkWell(onTap: () => _view(item), child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.remove_red_eye_outlined, size: 18, color: Colors.blueAccent))), const SizedBox(width: 8), InkWell(onTap: () => _save(editing: item), child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.edit_outlined, size: 18, color: Colors.green))), const SizedBox(width: 8), InkWell(onTap: () => _delete(item), child: const Padding(padding: EdgeInsets.all(4), child: Icon(Icons.delete_outline, size: 18, color: Colors.redAccent))) ])),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---- 卡片视图 (Tablet & Mobile) ----
+  Widget _cardsContent() {
     return Column(
       children: _items.map((item) {
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: Colors.grey.shade100)),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8, offset: const Offset(0, 2))]),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              CircleAvatar(backgroundColor: amountColor.withValues(alpha: 0.12), foregroundColor: amountColor, child: Text(initials(fieldText(item, 'title'), 'IN'))),
+              Container(width: 40, height: 40, decoration: BoxDecoration(color: SunsetColors.primary.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)), alignment: Alignment.center, child: Text(initials(fieldText(item, 'title'), 'IN'), style: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.bold))),
               const SizedBox(width: 12),
-              Expanded(child: Text(fieldText(item, 'title'), style: const TextStyle(color: SunsetColors.dark, fontWeight: FontWeight.w900, fontSize: 16))),
-              Text('RM ${money(item['price'])}', style: TextStyle(color: amountColor, fontWeight: FontWeight.w900, fontSize: 16)),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(fieldText(item, 'title'), style: const TextStyle(color: SunsetColors.dark, fontWeight: FontWeight.w900, fontSize: 15)),
+                    Text('${fieldText(item, 'date')} • ${fieldText(item, 'time')}', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              Text('+RM ${money(item['price'])}', style: TextStyle(color: amountColor, fontWeight: FontWeight.w900, fontSize: 16)),
             ]),
-            const SizedBox(height: 10),
-            Text('${fieldText(item, 'date')}  ${fieldText(item, 'time')}', style: const TextStyle(color: Color(0x992D2520), fontWeight: FontWeight.w700)),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Wrap(spacing: 8, runSpacing: 8, children: [
-              Chip(label: Text(nestedText(item, 'category', 'name')), backgroundColor: const Color(0xFFFFF7ED), side: BorderSide.none),
-              Chip(label: Text(nestedText(item, 'payment_method', 'name')), backgroundColor: const Color(0xFFF1F5F9), side: BorderSide.none),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(6)), child: Text(nestedText(item, 'category', 'name'), style: const TextStyle(color: SunsetColors.primary, fontSize: 11, fontWeight: FontWeight.bold))),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)), child: Text(nestedText(item, 'payment_method', 'name'), style: const TextStyle(color: Color(0xFF475569), fontSize: 11, fontWeight: FontWeight.bold))),
             ]),
-            Align(alignment: Alignment.centerRight, child: ActionButtons(onView: () => _view(item), onEdit: () => _save(editing: item), onDelete: () => _delete(item))),
+            const SizedBox(height: 12),
+            const Divider(height: 1, color: Color(0xFFF3F4F6)),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _cardActionBtn(Icons.remove_red_eye_outlined, 'View', Colors.grey.shade600, () => _view(item)),
+                _cardActionBtn(Icons.edit_outlined, 'Edit', Colors.grey.shade600, () => _save(editing: item)),
+                _cardActionBtn(Icons.delete_outline, 'Delete', Colors.redAccent, () => _delete(item)),
+              ],
+            )
           ]),
         );
       }).toList(),
     );
   }
 
-  Widget _table() {
+  Widget _cardActionBtn(IconData icon, String label, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(children: [Icon(icon, size: 16, color: color), const SizedBox(width: 6), Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold))]),
+      ),
+    );
+  }
+
+  // ---- 统底部分页器 ----
+  Widget _buildUnifiedPagination() {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade100)),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowColor: WidgetStateProperty.all(SunsetColors.secondary),
-          headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
-          columns: const [
-            DataColumn(label: Text('Title')), DataColumn(label: Text('Description')), DataColumn(label: Text('Amount')),
-            DataColumn(label: Text('Date')), DataColumn(label: Text('Time')), DataColumn(label: Text('Method')),
-            DataColumn(label: Text('Category')), DataColumn(label: Text('Actions')),
-          ],
-          rows: _items.map((item) {
-            return DataRow(cells: [
-              DataCell(Text(fieldText(item, 'title'), overflow: TextOverflow.ellipsis)),
-              DataCell(SizedBox(width: 170, child: Text(fieldText(item, 'description', 'N/A'), overflow: TextOverflow.ellipsis))),
-              DataCell(Text('RM ${money(item['price'])}', style: TextStyle(color: amountColor, fontWeight: FontWeight.w900))),
-              DataCell(Text(fieldText(item, 'date'))),
-              DataCell(Text(fieldText(item, 'time'))),
-              DataCell(Text(nestedText(item, 'payment_method', 'name'))),
-              DataCell(Text(nestedText(item, 'category', 'name'))),
-              DataCell(ActionButtons(onView: () => _view(item), onEdit: () => _save(editing: item), onDelete: () => _delete(item))),
-            ]);
-          }).toList(),
-        ),
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade100)), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('Page $_page of $_pages', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w600, fontSize: 13)),
+          Row(
+            children: [
+              InkWell(onTap: _page > 1 ? () { setState(() => _page--); _load(); } : null, borderRadius: BorderRadius.circular(8), child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.chevron_left, size: 18, color: _page > 1 ? SunsetColors.dark : Colors.grey.shade300))),
+              const SizedBox(width: 8),
+              Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(8)), child: Text('$_page', style: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.bold, fontSize: 14))),
+              const SizedBox(width: 8),
+              InkWell(onTap: _page < _pages ? () { setState(() => _page++); _load(); } : null, borderRadius: BorderRadius.circular(8), child: Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(8)), child: Icon(Icons.chevron_right, size: 18, color: _page < _pages ? SunsetColors.dark : Colors.grey.shade300))),
+            ],
+          )
+        ],
       ),
     );
   }
 
   Widget _empty() {
-    return Container(
-      width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 48),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade100)),
-      child: Text('No ${plural.toLowerCase()} found matching criteria.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w800)),
-    );
+    return Center(child: Text('No ${plural.toLowerCase()} found matching criteria.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w800)));
   }
 }
 
@@ -347,8 +542,8 @@ class IncomeFormDialog extends StatefulWidget {
 class _IncomeFormDialogState extends State<IncomeFormDialog> {
   late final TextEditingController _title; late final TextEditingController _description; late final TextEditingController _price;
   late final TextEditingController _date; late final TextEditingController _time; 
-  late String _categoryId; // 恢复：使用 late String
-  late String _methodId;   // 恢复：使用 late String
+  late String _categoryId;
+  late String _methodId;
 
   @override
   void initState() {
@@ -361,7 +556,6 @@ class _IncomeFormDialogState extends State<IncomeFormDialog> {
     _date = TextEditingController(text: fieldText(item, 'date', now.toIso8601String().substring(0, 10)));
     _time = TextEditingController(text: fieldText(item, 'time', '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}').substring(0, 5));
     
-    // 恢复：和 ExpenseFormDialog 结构完全保持 100% 相同
     _categoryId = fieldText(item, 'category_id', widget.categories.isNotEmpty ? '${widget.categories.first['id']}' : '');
     _methodId = fieldText(item, 'payment_method_id', widget.methods.isNotEmpty ? '${widget.methods.first['id']}' : '');
   }
@@ -370,21 +564,13 @@ class _IncomeFormDialogState extends State<IncomeFormDialog> {
   void dispose() { _title.dispose(); _description.dispose(); _price.dispose(); _date.dispose(); _time.dispose(); super.dispose(); }
 
   Future<void> _selectDate() async {
-    final date = await showDatePicker(
-      context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100),
-      builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: SunsetColors.secondary)), child: child!),
-    );
+    final date = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100), builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: SunsetColors.secondary)), child: child!));
     if (date != null) setState(() => _date.text = date.toIso8601String().split('T')[0]);
   }
 
   Future<void> _selectTime() async {
-    final time = await showTimePicker(
-      context: context, initialTime: TimeOfDay.now(),
-      builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: SunsetColors.secondary)), child: child!),
-    );
-    if (time != null) {
-      setState(() => _time.text = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}');
-    }
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.now(), builder: (context, child) => Theme(data: Theme.of(context).copyWith(colorScheme: const ColorScheme.light(primary: SunsetColors.secondary)), child: child!));
+    if (time != null) setState(() => _time.text = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}');
   }
 
   @override
@@ -430,7 +616,6 @@ class _IncomeFormDialogState extends State<IncomeFormDialog> {
     );
   }
 
-  // 恢复：和 ExpenseFormDialog 结构完全保持 100% 相同
   Widget _dropdown(String value, String label, List<JsonMap> options, ValueChanged<String> onChanged) {
     return DropdownButtonFormField<String>(
       initialValue: value.isEmpty ? null : value, decoration: sunsetFieldDecoration(label),
