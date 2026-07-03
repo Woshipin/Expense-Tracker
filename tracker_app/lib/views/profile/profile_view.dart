@@ -43,6 +43,7 @@ class _ProfileViewState extends State<ProfileView> {
     
     final result = await showDialog<_ProfileFormData>(
       context: context,
+      barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
       builder: (_) => ProfileFormDialog(user: _user!),
     );
     
@@ -82,6 +83,7 @@ class _ProfileViewState extends State<ProfileView> {
   Future<void> _changePassword() async {
     final result = await showDialog<_PasswordFormData>(
       context: context,
+      barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
       builder: (_) => const PasswordFormDialog(),
     );
     if (result == null) return;
@@ -173,25 +175,17 @@ class _ProfileViewState extends State<ProfileView> {
     ]);
   }
 
-  // ============== 【核心重构：将请求路由重定向到 /api 跨域通道】 ==============
   String _fixImageUrl(String originalUrl) {
     if (originalUrl.isEmpty || originalUrl == 'null') return '';
-
     try {
-      // 提取文件名 (例如：1782985020_6a4631c2fdc0.jpg)
       final uri = Uri.parse(originalUrl);
       final filename = uri.pathSegments.last;
-
-      // 获取探测器锁定的当前 API 根路径 (例如 http://127.0.0.1:8000/api)
       String apiBase = ApiClient().currentBaseUrl;
-      
-      // 拼接成经过 API 跨域放行代理的专属图片地址
       return '$apiBase/images/$filename';
     } catch (_) {
       return originalUrl;
     }
   }
-  // =========================================================
 
   Widget _avatar(JsonMap user, {double size = 120}) {
     final rawImage = fieldText(user, 'image_path');
@@ -201,14 +195,8 @@ class _ProfileViewState extends State<ProfileView> {
       return ClipRRect(
         borderRadius: BorderRadius.circular(size / 4), 
         child: Image.network(
-          safeImage, 
-          width: size, 
-          height: size, 
-          fit: BoxFit.cover, 
-          errorBuilder: (context, error, stackTrace) {
-            debugPrint("Image Load Error: $error");
-            return _avatarFallback(user, size);
-          },
+          safeImage, width: size, height: size, fit: BoxFit.cover, 
+          errorBuilder: (context, error, stackTrace) => _avatarFallback(user, size),
         )
       );
     }
@@ -230,12 +218,7 @@ class _ProfileFormData {
   final Uint8List? imageBytes;
   final String? imageName;
 
-  const _ProfileFormData({
-    required this.fullName, 
-    required this.email,
-    this.imageBytes,
-    this.imageName,
-  });
+  const _ProfileFormData({required this.fullName, required this.email, this.imageBytes, this.imageName});
 }
 
 class ProfileFormDialog extends StatefulWidget {
@@ -248,9 +231,7 @@ class ProfileFormDialog extends StatefulWidget {
 class _ProfileFormDialogState extends State<ProfileFormDialog> {
   late final TextEditingController _name; 
   late final TextEditingController _email;
-  
-  String _imageName = '';
-  Uint8List? _imageBytes; 
+  String _imageName = ''; Uint8List? _imageBytes; 
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -268,15 +249,10 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
       final dynamic image = await _picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
         final bytes = await image.readAsBytes();
-        setState(() {
-          _imageName = image.name;
-          _imageBytes = bytes;
-        });
+        setState(() { _imageName = image.name; _imageBytes = bytes; });
       }
     } catch (e) {
-      if (mounted) {
-        SunsetToast.show(context, 'Failed to pick image: ${e.toString().split('\n').first}', type: SunsetToastType.error);
-      }
+      if (mounted) SunsetToast.show(context, 'Failed to pick image: ${e.toString().split('\n').first}', type: SunsetToastType.error);
     }
   }
 
@@ -285,134 +261,125 @@ class _ProfileFormDialogState extends State<ProfileFormDialog> {
     try {
       final uri = Uri.parse(originalUrl);
       final filename = uri.pathSegments.last;
-      String apiBase = ApiClient().currentBaseUrl;
-      return '$apiBase/images/$filename';
-    } catch (_) {
-      return originalUrl;
-    }
+      return '${ApiClient().currentBaseUrl}/images/$filename';
+    } catch (_) { return originalUrl; }
   }
 
   Widget _buildAvatarPreview() {
-    if (_imageBytes != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(11),
-        child: Image.memory(_imageBytes!, width: 80, height: 80, fit: BoxFit.cover),
-      );
-    }
-    
+    if (_imageBytes != null) return ClipRRect(borderRadius: BorderRadius.circular(11), child: Image.memory(_imageBytes!, width: 80, height: 80, fit: BoxFit.cover));
     final rawOldImage = fieldText(widget.user, 'image_path');
     final safeOldImage = _fixImageUrl(rawOldImage);
-
-    if (safeOldImage.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(11),
-        child: Image.network(
-          safeOldImage, 
-          width: 80, 
-          height: 80, 
-          fit: BoxFit.cover, 
-          errorBuilder: (_, __, ___) => _buildEmptyPlaceholder()
-        ),
-      );
-    }
-
+    if (safeOldImage.isNotEmpty) return ClipRRect(borderRadius: BorderRadius.circular(11), child: Image.network(safeOldImage, width: 80, height: 80, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _buildEmptyPlaceholder()));
     return _buildEmptyPlaceholder();
   }
 
   Widget _buildEmptyPlaceholder() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center, 
-      children: [
-        Icon(Icons.image_outlined, color: Colors.grey.shade400, size: 28), 
-        const SizedBox(height: 4), 
-        Text('Empty', style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.bold))
-      ]
-    );
+    return Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.image_outlined, color: Colors.grey.shade400, size: 28), const SizedBox(height: 4), Text('Empty', style: TextStyle(color: Colors.grey.shade500, fontSize: 10, fontWeight: FontWeight.bold))]);
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    // 使用自定义 Dialog 替代 AlertDialog，实现自适应高度
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Text('Edit Profile', style: TextStyle(fontWeight: FontWeight.w900)),
-          IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-        ],
-      ),
-      content: SizedBox(
-        width: 460,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(16)),
-                child: Row(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 460), // 只限制宽度，不限制高度
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // 让高度自适应内容
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 18, 16, 18),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade100))),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Edit Profile', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      width: 80, height: 80,
-                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid)),
-                      child: _buildAvatarPreview(),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(16)),
+                      child: Row(
                         children: [
-                          const Text('UPDATE AVATAR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey)),
-                          const SizedBox(height: 8),
-                          InkWell(
-                            onTap: _pickImage, borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                              child: Row(
-                                children: [
-                                  Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Text('选择文件', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
-                                  const SizedBox(width: 12),
-                                  Expanded(child: Text(_imageName.isEmpty ? '未选择任何文件' : _imageName, style: TextStyle(color: Colors.grey.shade600, fontSize: 13), overflow: TextOverflow.ellipsis)),
-                                ],
-                              ),
+                          Container(width: 80, height: 80, decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid)), child: _buildAvatarPreview()),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('UPDATE AVATAR', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey)),
+                                const SizedBox(height: 8),
+                                InkWell(
+                                  onTap: _pickImage, borderRadius: BorderRadius.circular(8),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+                                    child: Row(
+                                      children: [
+                                        Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(6)), child: const Text('选择文件', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                                        const SizedBox(width: 12),
+                                        Expanded(child: Text(_imageName.isEmpty ? '未选择任何文件' : _imageName, style: TextStyle(color: Colors.grey.shade600, fontSize: 13), overflow: TextOverflow.ellipsis)),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              ],
                             ),
                           )
                         ],
                       ),
-                    )
+                    ),
+                    const SizedBox(height: 24),
+                    const Text('FULL NAME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey)), const SizedBox(height: 6),
+                    TextField(controller: _name, decoration: sunsetFieldDecoration('')),
+                    
+                    const SizedBox(height: 20),
+                    const Text('EMAIL ADDRESS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey)), const SizedBox(height: 6),
+                    TextField(controller: _email, decoration: sunsetFieldDecoration('')),
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              const Text('FULL NAME', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey)), const SizedBox(height: 6),
-              TextField(controller: _name, decoration: sunsetFieldDecoration('')),
-              
-              const SizedBox(height: 20),
-              const Text('EMAIL ADDRESS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.grey)), const SizedBox(height: 6),
-              TextField(controller: _email, decoration: sunsetFieldDecoration('')),
-            ],
-          ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))),
+              // 强制两按钮在同一行
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context), 
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), 
+                      child: const Text('Cancel')
+                    )
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (_name.text.trim().isEmpty || _email.text.trim().isEmpty) return;
+                        Navigator.pop(context, _ProfileFormData(fullName: _name.text.trim(), email: _email.text.trim(), imageBytes: _imageBytes, imageName: _imageName));
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      child: const Text('Save Changes'),
+                    )
+                  ),
+                ],
+              ),
+            )
+          ],
         ),
       ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), style: TextButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
-        ElevatedButton(
-          onPressed: () {
-            if (_name.text.trim().isEmpty || _email.text.trim().isEmpty) return;
-            Navigator.pop(context, _ProfileFormData(
-              fullName: _name.text.trim(), 
-              email: _email.text.trim(),
-              imageBytes: _imageBytes,
-              imageName: _imageName,
-            ));
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Save Changes'),
-        ),
-      ],
     );
   }
 }
@@ -438,31 +405,64 @@ class _PasswordFormDialogState extends State<PasswordFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    // 使用自定义 Dialog 完美控制响应式
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: const Text('Change Password', style: TextStyle(fontWeight: FontWeight.w900)),
-      content: SizedBox(
-        width: 460,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: _current, obscureText: _obsCurrent, decoration: sunsetFieldDecoration('Current Password', suffixIcon: _eyeIcon(_obsCurrent, () => setState(() => _obsCurrent = !_obsCurrent)))),
-          const SizedBox(height: 14),
-          TextField(controller: _password, obscureText: _obsNew, decoration: sunsetFieldDecoration('New Password', suffixIcon: _eyeIcon(_obsNew, () => setState(() => _obsNew = !_obsNew)))),
-          const SizedBox(height: 14),
-          TextField(controller: _confirm, obscureText: _obsConfirm, decoration: sunsetFieldDecoration('Confirm New Password', suffixIcon: _eyeIcon(_obsConfirm, () => setState(() => _obsConfirm = !_obsConfirm)))),
-        ]),
-      ),
-      actions: [
-        OutlinedButton(onPressed: () => Navigator.pop(context), style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Cancel')),
-        ElevatedButton(
-          onPressed: () {
-            if (_current.text.isEmpty || _password.text.isEmpty || _confirm.text.isEmpty) return;
-            Navigator.pop(context, _PasswordFormData(current: _current.text, password: _password.text, confirm: _confirm.text));
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Update Password'),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, 
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
+              child: const Text('Change Password', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(controller: _current, obscureText: _obsCurrent, decoration: sunsetFieldDecoration('Current Password', suffixIcon: _eyeIcon(_obsCurrent, () => setState(() => _obsCurrent = !_obsCurrent)))),
+                    const SizedBox(height: 14),
+                    TextField(controller: _password, obscureText: _obsNew, decoration: sunsetFieldDecoration('New Password', suffixIcon: _eyeIcon(_obsNew, () => setState(() => _obsNew = !_obsNew)))),
+                    const SizedBox(height: 14),
+                    TextField(controller: _confirm, obscureText: _obsConfirm, decoration: sunsetFieldDecoration('Confirm New Password', suffixIcon: _eyeIcon(_obsConfirm, () => setState(() => _obsConfirm = !_obsConfirm)))),
+                  ]
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(24),
+              // 强制保证一行显示
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context), 
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), 
+                      child: const Text('Cancel')
+                    )
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (_current.text.isEmpty || _password.text.isEmpty || _confirm.text.isEmpty) return;
+                        Navigator.pop(context, _PasswordFormData(current: _current.text, password: _password.text, confirm: _confirm.text));
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF10B981), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      child: const Text('Update Password'),
+                    )
+                  ),
+                ],
+              ),
+            )
+          ],
         ),
-      ],
+      ),
     );
   }
   

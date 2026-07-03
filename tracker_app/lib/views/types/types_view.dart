@@ -55,6 +55,7 @@ class _TypesViewState extends State<TypesView> {
   Future<void> _save({JsonMap? editing}) async {
     final result = await showDialog<_TypeFormData>(
       context: context,
+      barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
       builder: (_) => TypeFormDialog(editing: editing),
     );
     if (result == null) return;
@@ -89,62 +90,116 @@ class _TypesViewState extends State<TypesView> {
   void _view(JsonMap item) {
     showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
+      barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Type Details', style: TextStyle(fontWeight: FontWeight.w900)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 76, height: 76,
-              decoration: BoxDecoration(color: SunsetColors.secondary.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(20)),
-              child: const Icon(Icons.layers_outlined, color: SunsetColors.secondary, size: 36),
-            ),
-            const SizedBox(height: 16),
-            Text(fieldText(item, 'name'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 10),
-            StatusBadge(status: item['status']),
-          ],
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.dark, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            child: const Text('Close'),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                child: const Text('Type Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+              ),
+              Flexible(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 76, height: 76,
+                        decoration: BoxDecoration(color: SunsetColors.secondary.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(20)),
+                        child: const Icon(Icons.layers_outlined, color: SunsetColors.secondary, size: 36),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(fieldText(item, 'name'), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 10),
+                      StatusBadge(status: item['status']),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.grey.shade100))),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.dark, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  // 🌟 核心修复：完全响应式的过滤条
+  Widget _buildResponsiveToolbar() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.10)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
+          
+          final searchField = TextField(
+            controller: _search.controller, 
+            onChanged: (_) => _search.onChanged(() { _page = 1; _load(); }), 
+            decoration: sunsetFieldDecoration('Search types...', icon: Icons.search)
+          );
+
+          final dropdownField = DropdownButtonFormField<String>(
+            initialValue: _status,
+            decoration: sunsetFieldDecoration('All Status'),
+            items: const [
+              DropdownMenuItem(value: 'all', child: Text('All Status')),
+              DropdownMenuItem(value: '1', child: Text('Active')),
+              DropdownMenuItem(value: '0', child: Text('Inactive')),
+            ],
+            onChanged: (value) { if (value == null) return; setState(() { _status = value; _page = 1; }); _load(); },
+          );
+
+          if (isMobile) {
+            return Column(
+              children: [
+                searchField,
+                const SizedBox(height: 12),
+                dropdownField,
+              ],
+            );
+          } else {
+            return Row(
+              children: [
+                Expanded(child: searchField),
+                const SizedBox(width: 12),
+                Expanded(child: dropdownField),
+              ],
+            );
+          }
+        },
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final double fw = MediaQuery.of(context).size.width < 700 ? double.infinity : 260;
-
     return PageScaffold(
       title: 'Transaction Types',
       subtitle: 'Manage global transaction types.',
       action: PrimaryActionButton(label: 'Add Type', icon: Icons.add, onPressed: () => _save()),
       children: [
-        ToolbarBox(
-          children: [
-            SizedBox(width: fw, child: TextField(controller: _search.controller, onChanged: (_) => _search.onChanged(() { _page = 1; _load(); }), decoration: sunsetFieldDecoration('Search types...', icon: Icons.search))),
-            SizedBox(
-              width: fw,
-              child: DropdownButtonFormField<String>(
-                initialValue: _status,
-                decoration: sunsetFieldDecoration('All Status'),
-                items: const [
-                  DropdownMenuItem(value: 'all', child: Text('All Status')),
-                  DropdownMenuItem(value: '1', child: Text('Active')),
-                  DropdownMenuItem(value: '0', child: Text('Inactive')),
-                ],
-                onChanged: (value) { if (value == null) return; setState(() { _status = value; _page = 1; }); _load(); },
-              ),
-            ),
-          ],
-        ),
+        _buildResponsiveToolbar(), // 使用响应式组件替代旧的 ToolbarBox
         const SizedBox(height: 20),
         if (_loading) const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator(color: SunsetColors.primary)))
         else if (_types.isEmpty) _empty('No types found.')
@@ -220,36 +275,64 @@ class _TypeFormDialogState extends State<TypeFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text(widget.editing == null ? 'Add Type' : 'Edit Type', style: const TextStyle(fontWeight: FontWeight.w900)),
-      content: SizedBox(
-        width: 460, 
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 400),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(controller: _name, decoration: sunsetFieldDecoration('Type Name')),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<int>(
-              initialValue: _status, decoration: sunsetFieldDecoration('Status'),
-              items: const [DropdownMenuItem(value: 1, child: Text('Active')), DropdownMenuItem(value: 0, child: Text('Inactive'))],
-              onChanged: (value) => setState(() => _status = value ?? 1),
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 16, 16),
+              child: Text(widget.editing == null ? 'Add Type' : 'Edit Type', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900)),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(controller: _name, decoration: sunsetFieldDecoration('Type Name')),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<int>(
+                      initialValue: _status, decoration: sunsetFieldDecoration('Status'),
+                      items: const [DropdownMenuItem(value: 1, child: Text('Active')), DropdownMenuItem(value: 0, child: Text('Inactive'))],
+                      onChanged: (value) => setState(() => _status = value ?? 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context), 
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), 
+                      child: const Text('Cancel')
+                    )
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (_name.text.trim().isEmpty) return;
+                        Navigator.pop(context, _TypeFormData(name: _name.text.trim(), status: _status));
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      child: const Text('Save Type'),
+                    )
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      actions: [
-        OutlinedButton(onPressed: () => Navigator.pop(context), style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Cancel')),
-        ElevatedButton(
-          onPressed: () {
-            if (_name.text.trim().isEmpty) return;
-            Navigator.pop(context, _TypeFormData(name: _name.text.trim(), status: _status));
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Save Type'),
-        ),
-      ],
     );
   }
 }

@@ -137,6 +137,7 @@ void showApiError(BuildContext context, DioException e, String fallback) {
   SunsetToast.show(context, dioMessage(e, fallback), type: SunsetToastType.error);
 }
 
+// 🌟🌟 核心修复区域：PageScaffold 🌟🌟
 class PageScaffold extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -152,39 +153,44 @@ class PageScaffold extends StatelessWidget {
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(18, 24, 18, 32),
-          child: Center(
+          // 🌟 修复点：用 Align 代替 Center，用 SizedBox 强制撑满可用宽度，用 stretch 强制子组件拉伸
+          child: Align(
+            alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1240),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final wide = constraints.maxWidth >= 640;
-                      final headerText = Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: const TextStyle(color: SunsetColors.dark, fontSize: 26, fontWeight: FontWeight.w900)),
-                          const SizedBox(height: 6),
-                          Text(subtitle, style: const TextStyle(color: Color(0x992D2520), fontSize: 14, fontWeight: FontWeight.w600)),
-                        ],
-                      );
-                      if (action == null) return headerText;
-                      return Flex(
-                        direction: wide ? Axis.horizontal : Axis.vertical,
-                        crossAxisAlignment: wide ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(flex: wide ? 1 : 0, child: headerText),
-                          SizedBox(width: wide ? 16 : 0, height: wide ? 0 : 14),
-                          action!,
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 20),
-                  ...children,
-                ],
+              child: SizedBox(
+                width: double.infinity, // 强制达到最大可用宽度
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch, // 强制所有子组件横向填满
+                  children: [
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        final wide = constraints.maxWidth >= 640;
+                        final headerText = Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(title, style: const TextStyle(color: SunsetColors.dark, fontSize: 26, fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 6),
+                            Text(subtitle, style: const TextStyle(color: Color(0x992D2520), fontSize: 14, fontWeight: FontWeight.w600)),
+                          ],
+                        );
+                        if (action == null) return headerText;
+                        return Flex(
+                          direction: wide ? Axis.horizontal : Axis.vertical,
+                          crossAxisAlignment: wide ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(flex: wide ? 1 : 0, child: headerText),
+                            SizedBox(width: wide ? 16 : 0, height: wide ? 0 : 14),
+                            action!,
+                          ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    ...children,
+                  ],
+                ),
               ),
             ),
           ),
@@ -213,7 +219,6 @@ class PrimaryActionButton extends StatelessWidget {
         elevation: 7,
         shadowColor: SunsetColors.secondary.withValues(alpha: 0.22),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-        // 修改点：按钮略带圆角 (10) 替代原来的强圆角 (16)
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), 
         textStyle: const TextStyle(fontWeight: FontWeight.w900),
       ),
@@ -288,34 +293,16 @@ InputDecoration sunsetFieldDecoration(String hint, {IconData? icon, Widget? suff
     filled: true,
     fillColor: Colors.white,
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    isDense: true, // 🌟 修复边框裁切的关键
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10), // 微圆角
+      borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.28)),
     ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10), // 微圆角
+      borderRadius: BorderRadius.circular(10),
       borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5),
     ),
   );
-}
-
-class ToolbarBox extends StatelessWidget {
-  final List<Widget> children;
-  const ToolbarBox({super.key, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.10)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
-      ),
-      child: Wrap(spacing: 12, runSpacing: 12, children: children),
-    );
-  }
 }
 
 class PaginationBar extends StatelessWidget {
@@ -413,45 +400,76 @@ class ActionButtons extends StatelessWidget {
   }
 }
 
+// 🌟 修复确认删除弹窗
 Future<bool> confirmDeleteDialog(BuildContext context, {required String title, required String name, required IconData icon}) async {
+  final isMobile = MediaQuery.of(context).size.width < 600;
+  
   final result = await showDialog<bool>(
     context: context,
     barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
-    builder: (context) => AlertDialog(
+    builder: (context) => Dialog(
+      insetPadding: EdgeInsets.all(isMobile ? 16 : 24),
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text(title, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('This action cannot be undone.'),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFEE2E2))),
-            child: Row(
-              children: [
-                Icon(icon, color: Colors.red),
-                const SizedBox(width: 12),
-                Expanded(child: Text(name, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900))),
-              ],
+      child: Container(
+        width: isMobile ? double.infinity : 460, // 🌟 自适应宽度
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85), // 🌟 限制最高高度
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // 🌟 根据内容收缩
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 8),
+              child: Text(title, style: const TextStyle(color: Colors.red, fontSize: 20, fontWeight: FontWeight.w900)),
             ),
-          ),
-        ],
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('This action cannot be undone.', style: TextStyle(fontSize: 14)),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFFEE2E2))),
+                      child: Row(
+                        children: [
+                          Icon(icon, color: Colors.red),
+                          const SizedBox(width: 12),
+                          Expanded(child: Text(name, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900))),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      child: const Text('Delete'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      actions: [
-        OutlinedButton(
-          onPressed: () => Navigator.pop(context, false),
-          style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, true),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Delete'),
-        ),
-      ],
     ),
   );
   return result == true;

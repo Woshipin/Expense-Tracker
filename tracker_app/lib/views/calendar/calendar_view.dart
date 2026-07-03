@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 🌟 新增：用于限制输入框格式
 
 import '../../core/api/api_client.dart';
 import '../../core/constants/colors.dart';
@@ -522,7 +523,7 @@ class _RecordFormDialogState extends State<RecordFormDialog> {
                     const SizedBox(height: 20),
                     Container(
                       padding: const EdgeInsets.all(18), decoration: BoxDecoration(color: accent.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: accent.withValues(alpha: 0.15))), // 微圆角
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(Icons.account_balance_wallet_outlined, size: 16, color: accent), const SizedBox(width: 8), Text('BASIC DETAILS', style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1))]), const SizedBox(height: 16), _label('Title'), TextField(controller: _titleController, decoration: _fieldDecoration(isExpense ? 'E.g. Groceries' : 'E.g. Salary')), if (_errorFor('title') != null) _errorText(_errorFor('title')!), const SizedBox(height: 16), _label('Amount (RM)'), TextField(controller: _priceController, keyboardType: const TextInputType.numberWithOptions(decimal: true), style: TextStyle(color: accent, fontWeight: FontWeight.w900), decoration: _fieldDecoration('0.00')), if (_errorFor('price') != null) _errorText(_errorFor('price')!), const SizedBox(height: 16), _label('Description (Optional)'), TextField(controller: _descriptionController, maxLines: 3, decoration: _fieldDecoration('Enter description...')), if (_errorFor('description') != null) _errorText(_errorFor('description')!)]),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Row(children: [Icon(Icons.account_balance_wallet_outlined, size: 16, color: accent), const SizedBox(width: 8), Text('BASIC DETAILS', style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w900, letterSpacing: 1))]), const SizedBox(height: 16), _label('Title'), TextField(controller: _titleController, decoration: _fieldDecoration(isExpense ? 'E.g. Groceries' : 'E.g. Salary')), if (_errorFor('title') != null) _errorText(_errorFor('title')!), const SizedBox(height: 16), _label('Amount (RM)'), TextField(controller: _priceController, keyboardType: const TextInputType.numberWithOptions(decimal: true), inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*'))], style: TextStyle(color: accent, fontWeight: FontWeight.w900), decoration: _fieldDecoration('0.00')), if (_errorFor('price') != null) _errorText(_errorFor('price')!), const SizedBox(height: 16), _label('Description (Optional)'), TextField(controller: _descriptionController, maxLines: 3, decoration: _fieldDecoration('Enter description...')), if (_errorFor('description') != null) _errorText(_errorFor('description')!)]),
                     ),
                     const SizedBox(height: 18),
                     Container(

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 🌟 新增：用于限制输入框格式
 
 import '../../core/api/api_client.dart';
 import '../../core/constants/colors.dart';
@@ -144,11 +145,11 @@ class _BudgetViewState extends State<BudgetView> {
                   _buildHeader(width),
                   const SizedBox(height: 24),
                   if (_isLoading)
-                    _buildLoading()
+                    _buildLoading(width) // 🌟 修复：传入宽度使加载动画也响应式
                   else if (_displayedBudgets.isEmpty)
                     _buildEmptyState()
                   else
-                    _buildBudgetContent(width), // 动态响应式内容区
+                    _buildBudgetContent(width),
                 ],
               ),
             );
@@ -179,12 +180,11 @@ class _BudgetViewState extends State<BudgetView> {
           runSpacing: 12,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            // Filters - 微圆角 10
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(10), // 微圆角
+                borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.1)),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
               ),
@@ -212,7 +212,6 @@ class _BudgetViewState extends State<BudgetView> {
               ),
             ),
             
-            // Refresh AI Button - 微圆角 10
             InkWell(
               onTap: _isAnalyzing ? null : _handleReanalyze,
               borderRadius: BorderRadius.circular(10),
@@ -220,7 +219,7 @@ class _BudgetViewState extends State<BudgetView> {
                 width: 40, height: 40,
                 decoration: BoxDecoration(
                   color: Colors.white, 
-                  borderRadius: BorderRadius.circular(10), // 微圆角
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.1)),
                   boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4)],
                 ),
@@ -232,7 +231,6 @@ class _BudgetViewState extends State<BudgetView> {
               ),
             ),
 
-            // Add Budget Button - 微圆角 10
             ElevatedButton.icon(
               onPressed: () => _openFormDialog(null),
               icon: const Icon(Icons.add, size: 18),
@@ -243,7 +241,7 @@ class _BudgetViewState extends State<BudgetView> {
                 elevation: 4,
                 shadowColor: const Color(0xFFF97316).withValues(alpha: 0.3),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), // 微圆角
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 textStyle: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
@@ -269,14 +267,21 @@ class _BudgetViewState extends State<BudgetView> {
     );
   }
 
-  Widget _buildLoading() {
+  Widget _buildLoading(double width) {
+    // 🌟 修复：响应式列数，防止手机端挤扁
+    int cols = width >= 1200 ? 3 : (width >= 700 ? 2 : 1);
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 24, crossAxisSpacing: 24, mainAxisExtent: 220),
-      itemCount: 4,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols, 
+        mainAxisSpacing: 24, 
+        crossAxisSpacing: 24, 
+        mainAxisExtent: 290
+      ),
+      itemCount: cols == 1 ? 2 : 4, // 手机端只显示2个骨架屏省空间
       itemBuilder: (context, index) => Container(
-        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(12)), // 微圆角
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -287,7 +292,7 @@ class _BudgetViewState extends State<BudgetView> {
       padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 20),
       decoration: BoxDecoration(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12), // 微圆角
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.2), width: 2, style: BorderStyle.solid),
       ),
       child: Column(
@@ -308,7 +313,7 @@ class _BudgetViewState extends State<BudgetView> {
             label: const Text('Create First Budget'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), // 微圆角
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
           ),
@@ -317,49 +322,44 @@ class _BudgetViewState extends State<BudgetView> {
     );
   }
 
-  // 核心修复：根据屏幕宽度决定使用 List (防止溢出) 还是 Grid
   Widget _buildBudgetContent(double width) {
-    if (width < 700) {
-      // 手机端：使用 Column 而不是定高 GridView，内容多长就会自动撑开多高，绝不溢出！
-      return Column(
-        children: _displayedBudgets.map((b) => Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: _buildBudgetCard(b),
-        )).toList(),
-      );
-    } else {
-      // 桌面/平板端：使用 GridView，横向排列
-      int cols = width >= 1200 ? 3 : 2;
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: _displayedBudgets.length,
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: cols, 
-          mainAxisSpacing: 24, 
-          crossAxisSpacing: 24, 
-          mainAxisExtent: 280, // 稍微增加基础高度以适应可能的长文本
-        ),
-        itemBuilder: (context, index) => _buildBudgetCard(_displayedBudgets[index]),
-      );
-    }
+    // 🌟 修复：无论手机还是桌面，统一使用 GridView 并配合动态列数。
+    // 这解决了以前手机端使用 Column 导致的布局高度计算崩溃问题。
+    int cols = width >= 1200 ? 3 : (width >= 700 ? 2 : 1);
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _displayedBudgets.length,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: cols, 
+        mainAxisSpacing: 24, 
+        crossAxisSpacing: 24, 
+        mainAxisExtent: 290, // 固定高度保护，防止文字被切或无限高度溢出
+      ),
+      itemBuilder: (context, index) => _buildBudgetCard(_displayedBudgets[index]),
+    );
   }
 
-  // 独立的卡片渲染逻辑 (微圆角 12)
   Widget _buildBudgetCard(BudgetModel budget) {
     final insight = _getAiInsight(budget);
     final daysLeftText = _getDaysLeftText(budget.year, budget.month);
+    
+    // 🌟 修复：安全检查百分比，防止 NaN 或 Infinity 导致 clamp() 崩溃
+    double safePercent = budget.percentage;
+    if (safePercent.isNaN || safePercent.isInfinite) safePercent = 0.0;
+    final widthFactor = (safePercent / 100).clamp(0.0, 1.0);
 
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white, 
-        borderRadius: BorderRadius.circular(12), // 微圆角
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: insight.borderColor, width: 1.5),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8, offset: const Offset(0, 3))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           // 头部
           Row(
@@ -367,7 +367,7 @@ class _BudgetViewState extends State<BudgetView> {
             children: [
               Container(
                 width: 48, height: 48,
-                decoration: BoxDecoration(color: budget.category.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)), // 微圆角
+                decoration: BoxDecoration(color: budget.category.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
                 child: Icon(_iconForName(budget.category.icon), color: budget.category.color, size: 24),
               ),
               const SizedBox(width: 16),
@@ -415,7 +415,7 @@ class _BudgetViewState extends State<BudgetView> {
             decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(10)),
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
-              widthFactor: (budget.percentage / 100).clamp(0.0, 1.0),
+              widthFactor: widthFactor, // 🌟 使用处理过的安全值
               child: Container(decoration: BoxDecoration(color: insight.barColor, borderRadius: BorderRadius.circular(10))),
             ),
           ),
@@ -425,11 +425,12 @@ class _BudgetViewState extends State<BudgetView> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('${budget.percentage.toStringAsFixed(0)}% Used · $daysLeftText', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w700)),
+              Text('${safePercent.toStringAsFixed(0)}% Used · $daysLeftText', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w700)),
               Text('RM ${(budget.remaining > 0 ? budget.remaining : 0).toStringAsFixed(2)} left', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w700)),
             ],
           ),
-          const Spacer(),
+          
+          const SizedBox(height: 16),
           
           // AI 洞察
           Row(
@@ -457,7 +458,7 @@ class _BudgetViewState extends State<BudgetView> {
   Widget _actionButton(IconData icon, Color hoverColor, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(8), // 微圆角
+      borderRadius: BorderRadius.circular(8),
       child: Container(
         width: 32, height: 32,
         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
@@ -591,7 +592,7 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // 微圆角
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 460, maxHeight: 760),
         child: Column(
@@ -615,7 +616,15 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
                     
                     const SizedBox(height: 18),
                     _label('Limit Amount (RM)'),
-                    TextField(controller: _amountController, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: _fieldDecoration('e.g. 500.00')),
+                    TextField(
+                      controller: _amountController, 
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      // 🌟 修复：严密控制只能输入数字和小数点
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                      ],
+                      decoration: _fieldDecoration('e.g. 500.00')
+                    ),
                     _errorText('amount'),
 
                     const SizedBox(height: 18),
@@ -638,13 +647,13 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
                 children: [
                   OutlinedButton(
                     onPressed: _isSaving ? null : () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(foregroundColor: SunsetColors.dark.withValues(alpha: 0.66), side: BorderSide(color: Colors.grey.shade200), padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), // 微圆角
+                    style: OutlinedButton.styleFrom(foregroundColor: SunsetColors.dark.withValues(alpha: 0.66), side: BorderSide(color: Colors.grey.shade200), padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w800)),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: _isSaving ? null : _handleSave,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), // 微圆角
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [if (_isSaving) ...[const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)), const SizedBox(width: 8)], Text(_isSaving ? 'Saving...' : 'Save Budget', style: const TextStyle(fontWeight: FontWeight.w800))]),
                   ),
                 ],
@@ -700,7 +709,7 @@ class _BudgetDeleteDialogState extends State<BudgetDeleteDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       insetPadding: const EdgeInsets.all(18), backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), // 微圆角
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: Column(
@@ -740,13 +749,13 @@ class _BudgetDeleteDialogState extends State<BudgetDeleteDialog> {
                 children: [
                   OutlinedButton(
                     onPressed: _isDeleting ? null : () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(foregroundColor: SunsetColors.dark.withValues(alpha: 0.66), side: BorderSide(color: Colors.grey.shade200), padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), // 微圆角
+                    style: OutlinedButton.styleFrom(foregroundColor: SunsetColors.dark.withValues(alpha: 0.66), side: BorderSide(color: Colors.grey.shade200), padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w800)),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
                     onPressed: _isDeleting ? null : _handleDelete,
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), // 微圆角
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     child: Text(_isDeleting ? 'Deleting...' : 'Delete', style: const TextStyle(fontWeight: FontWeight.w800)),
                   ),
                 ],

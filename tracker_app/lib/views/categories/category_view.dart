@@ -126,8 +126,6 @@ class _CategoryViewState extends State<CategoryView> {
 
   @override
   Widget build(BuildContext context) {
-    final double fw = MediaQuery.of(context).size.width < 700 ? double.infinity : 260;
-
     return Scaffold(
       backgroundColor: SunsetColors.bgStart,
       body: SafeArea(
@@ -141,7 +139,7 @@ class _CategoryViewState extends State<CategoryView> {
                 children: [
                   _buildHeader(isWide),
                   const SizedBox(height: 20),
-                  _buildToolbar(fw),
+                  _buildResponsiveToolbar(), // 🌟 核心修复：调用全新的响应式工具栏
                   const SizedBox(height: 24),
                   if (_isLoading)
                     _buildLoading()
@@ -202,7 +200,7 @@ class _CategoryViewState extends State<CategoryView> {
             elevation: 8,
             shadowColor: SunsetColors.secondary.withValues(alpha: 0.24),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), // 统一微圆角 (10)
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             textStyle: const TextStyle(fontWeight: FontWeight.w800),
           ),
         ),
@@ -210,8 +208,8 @@ class _CategoryViewState extends State<CategoryView> {
     );
   }
 
-  // 统一宽度和响应式 Wrap 排列
-  Widget _buildToolbar(double fw) {
+  // 🌟 核心修复：严格控制 Row 和 Column 布局，防止边框被挤压裁切
+  Widget _buildResponsiveToolbar() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -220,13 +218,28 @@ class _CategoryViewState extends State<CategoryView> {
         border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.10)),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 12, offset: const Offset(0, 4))],
       ),
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: [
-          SizedBox(width: fw, child: _buildSearchField()),
-          SizedBox(width: fw, child: _buildStatusFilter()),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
+          
+          if (isMobile) {
+            return Column(
+              children: [
+                _buildSearchField(),
+                const SizedBox(height: 12),
+                _buildStatusFilter(),
+              ],
+            );
+          } else {
+            return Row(
+              children: [
+                Expanded(child: _buildSearchField()),
+                const SizedBox(width: 12),
+                Expanded(child: _buildStatusFilter()),
+              ],
+            );
+          }
+        },
       ),
     );
   }
@@ -243,11 +256,11 @@ class _CategoryViewState extends State<CategoryView> {
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10), // 微圆角
+          borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.30)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10), // 微圆角
+          borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5),
         ),
       ),
@@ -262,11 +275,11 @@ class _CategoryViewState extends State<CategoryView> {
         fillColor: Colors.white,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10), // 微圆角
+          borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.30)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10), // 微圆角
+          borderRadius: BorderRadius.circular(10),
           borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5),
         ),
       ),
@@ -580,9 +593,9 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 760), // 统一弹窗大小
+        constraints: const BoxConstraints(maxWidth: 460),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisSize: MainAxisSize.min, 
           children: [
             _dialogHeader(widget.editing == null ? 'Add Category' : 'Edit Category'),
             Flexible(
@@ -656,38 +669,41 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
             ),
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10)))),
+              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)), border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10)))),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  OutlinedButton(
-                    onPressed: _isSaving ? null : () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: SunsetColors.dark.withValues(alpha: 0.66),
-                      side: BorderSide(color: Colors.grey.shade200),
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), // 统一微圆角
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isSaving ? null : () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: SunsetColors.dark.withValues(alpha: 0.66),
+                        side: BorderSide(color: Colors.grey.shade200),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w800)),
+                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w800)),
+                    )
                   ),
                   const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: _isSaving ? null : _handleSave,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), // 统一微圆角
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_isSaving) ...[
-                          const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
-                          const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isSaving ? null : _handleSave,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_isSaving) ...[
+                            const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(_isSaving ? 'Saving...' : 'Save Category', style: const TextStyle(fontWeight: FontWeight.w800)),
                         ],
-                        Text(_isSaving ? 'Saving...' : 'Save Category', style: const TextStyle(fontWeight: FontWeight.w800)),
-                      ],
-                    ),
+                      ),
+                    )
                   ),
                 ],
               ),
@@ -737,8 +753,8 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
     return InputDecoration(
       hintText: hint, filled: true, fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.25))), // 微圆角
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5)), // 微圆角
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.25))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5)),
     );
   }
 
@@ -762,25 +778,27 @@ class CategoryDetailsDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _simpleHeader(context, 'Category Details'),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  Container(width: 82, height: 96, decoration: BoxDecoration(color: category.color.withValues(alpha: 0.09), borderRadius: BorderRadius.circular(20)), child: Icon(icon, size: 42, color: category.color)),
-                  const SizedBox(height: 18),
-                  Text(category.name, textAlign: TextAlign.center, style: const TextStyle(color: SunsetColors.dark, fontSize: 22, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
-                    child: Text(category.typeId == 2 ? 'Income' : 'Expense', style: const TextStyle(color: SunsetColors.primary, fontSize: 12, fontWeight: FontWeight.w900)),
-                  ),
-                  const SizedBox(height: 18),
-                  Container(
-                    width: double.infinity, padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade100)),
-                    child: Text(category.description.isEmpty ? 'No description provided.' : category.description, textAlign: TextAlign.center, style: const TextStyle(color: Color(0x992D2520), fontWeight: FontWeight.w700)),
-                  ),
-                ],
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    Container(width: 82, height: 96, decoration: BoxDecoration(color: category.color.withValues(alpha: 0.09), borderRadius: BorderRadius.circular(20)), child: Icon(icon, size: 42, color: category.color)),
+                    const SizedBox(height: 18),
+                    Text(category.name, textAlign: TextAlign.center, style: const TextStyle(color: SunsetColors.dark, fontSize: 22, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
+                      child: Text(category.typeId == 2 ? 'Income' : 'Expense', style: const TextStyle(color: SunsetColors.primary, fontSize: 12, fontWeight: FontWeight.w900)),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      width: double.infinity, padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade100)),
+                      child: Text(category.description.isEmpty ? 'No description provided.' : category.description, textAlign: TextAlign.center, style: const TextStyle(color: Color(0x992D2520), fontWeight: FontWeight.w700)),
+                    ),
+                  ],
+                ),
               ),
             ),
             _closeFooter(context),
@@ -818,61 +836,66 @@ class _CategoryDeleteDialogState extends State<CategoryDeleteDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _simpleHeader(context, 'Delete Category', titleColor: Colors.red),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Are you sure you want to delete this category? This action cannot be undone.', style: TextStyle(color: SunsetColors.dark, fontSize: 15, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 20),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFFEE2E2))),
-                    child: Row(
-                      children: [
-                        Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(14)), child: Icon(widget.icon, color: Colors.red)),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('DELETING CATEGORY', style: TextStyle(color: Colors.red.withValues(alpha: 0.55), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
-                              const SizedBox(height: 3),
-                              Text(widget.category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.w900)),
-                            ],
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Are you sure you want to delete this category? This action cannot be undone.', style: TextStyle(color: SunsetColors.dark, fontSize: 15, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(color: const Color(0xFFFEF2F2), borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFFEE2E2))),
+                      child: Row(
+                        children: [
+                          Container(width: 44, height: 44, decoration: BoxDecoration(color: const Color(0xFFFEE2E2), borderRadius: BorderRadius.circular(14)), child: Icon(widget.icon, color: Colors.red)),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('DELETING CATEGORY', style: TextStyle(color: Colors.red.withValues(alpha: 0.55), fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                                const SizedBox(height: 3),
+                                Text(widget.category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.red, fontSize: 18, fontWeight: FontWeight.w900)),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10)))),
+              decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)), border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10)))),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  OutlinedButton(
-                    onPressed: _isDeleting ? null : () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: SunsetColors.dark.withValues(alpha: 0.66),
-                      side: BorderSide(color: Colors.grey.shade200),
-                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), // 统一微圆角
-                    ),
-                    child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w800)),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _isDeleting ? null : () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: SunsetColors.dark.withValues(alpha: 0.66),
+                        side: BorderSide(color: Colors.grey.shade200),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w800)),
+                    )
                   ),
                   const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: _isDeleting ? null : _handleDelete,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red, foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)), // 统一微圆角
-                    ),
-                    child: Text(_isDeleting ? 'Deleting...' : 'Delete', style: const TextStyle(fontWeight: FontWeight.w800)),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _isDeleting ? null : _handleDelete,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red, foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: Text(_isDeleting ? 'Deleting...' : 'Delete', style: const TextStyle(fontWeight: FontWeight.w800)),
+                    )
                   ),
                 ],
               ),
@@ -900,10 +923,10 @@ Widget _simpleHeader(BuildContext context, String title, {Color? titleColor}) {
 Widget _closeFooter(BuildContext context) {
   return Container(
     width: double.infinity, padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10)))),
+    decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)), border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10)))),
     child: ElevatedButton(
       onPressed: () => Navigator.pop(context),
-      style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.dark, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), // 统一微圆角
+      style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.dark, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
       child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w800)),
     ),
   );
