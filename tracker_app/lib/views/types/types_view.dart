@@ -106,6 +106,7 @@ class _TypesViewState extends State<TypesView> {
               ),
               Flexible(
                 child: SingleChildScrollView(
+                  clipBehavior: Clip.none,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                   child: Column(
                     children: [
@@ -290,6 +291,7 @@ class _TypeFormDialogState extends State<TypeFormDialog> {
             ),
             Flexible(
               child: SingleChildScrollView(
+                clipBehavior: Clip.none,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

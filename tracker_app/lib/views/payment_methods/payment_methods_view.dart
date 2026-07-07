@@ -113,6 +113,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
               ),
               Flexible(
                 child: SingleChildScrollView(
+                  clipBehavior: Clip.none,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                   child: Column(
                     children: [
@@ -330,6 +331,7 @@ class _MethodFormDialogState extends State<MethodFormDialog> {
             ),
             Flexible(
               child: SingleChildScrollView(
+                clipBehavior: Clip.none,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start, 

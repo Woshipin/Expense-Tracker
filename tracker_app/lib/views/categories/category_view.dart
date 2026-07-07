@@ -133,8 +133,9 @@ class _CategoryViewState extends State<CategoryView> {
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 900;
             return SingleChildScrollView(
-              padding: EdgeInsets.fromLTRB(isWide ? 32 : 18, 24, isWide ? 32 : 18, 32),
-              child: Column(
+                clipBehavior: Clip.none,
+                padding: EdgeInsets.fromLTRB(isWide ? 32 : 18, 24, isWide ? 32 : 18, 32),
+                child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(isWide),
@@ -600,6 +601,7 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
             _dialogHeader(widget.editing == null ? 'Add Category' : 'Edit Category'),
             Flexible(
               child: SingleChildScrollView(
+                clipBehavior: Clip.none,
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -780,6 +782,7 @@ class CategoryDetailsDialog extends StatelessWidget {
             _simpleHeader(context, 'Category Details'),
             Flexible(
               child: SingleChildScrollView(
+                clipBehavior: Clip.none,
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   children: [
@@ -838,6 +841,7 @@ class _CategoryDeleteDialogState extends State<CategoryDeleteDialog> {
             _simpleHeader(context, 'Delete Category', titleColor: Colors.red),
             Flexible(
               child: SingleChildScrollView(
+                clipBehavior: Clip.none,
                 padding: const EdgeInsets.all(24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

@@ -152,6 +152,7 @@ class PageScaffold extends StatelessWidget {
       backgroundColor: SunsetColors.bgStart,
       body: SafeArea(
         child: SingleChildScrollView(
+          clipBehavior: Clip.none,
           padding: const EdgeInsets.fromLTRB(18, 24, 18, 32),
           // 🌟 修复点：用 Align 代替 Center，用 SizedBox 强制撑满可用宽度，用 stretch 强制子组件拉伸
           child: Align(
@@ -320,6 +321,7 @@ class PaginationBar extends StatelessWidget {
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: Colors.grey.shade100)),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
         child: Row(
           children: [
             Text('Page $currentPage of $totalPages', style: const TextStyle(color: Color(0x992D2520), fontSize: 13, fontWeight: FontWeight.w700)),
@@ -424,6 +426,7 @@ Future<bool> confirmDeleteDialog(BuildContext context, {required String title, r
             ),
             Flexible(
               child: SingleChildScrollView(
+                clipBehavior: Clip.none,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
