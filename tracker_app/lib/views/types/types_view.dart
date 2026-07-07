@@ -140,7 +140,7 @@ class _TypesViewState extends State<TypesView> {
     );
   }
 
-  // 🌟 核心修复：完全响应式的过滤条
+  // 🌟 完全响应式的过滤条
   Widget _buildResponsiveToolbar() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -200,7 +200,7 @@ class _TypesViewState extends State<TypesView> {
       subtitle: 'Manage global transaction types.',
       action: PrimaryActionButton(label: 'Add Type', icon: Icons.add, onPressed: () => _save()),
       children: [
-        _buildResponsiveToolbar(), // 使用响应式组件替代旧的 ToolbarBox
+        _buildResponsiveToolbar(), 
         const SizedBox(height: 20),
         if (_loading) const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator(color: SunsetColors.primary)))
         else if (_types.isEmpty) _empty('No types found.')
@@ -209,7 +209,13 @@ class _TypesViewState extends State<TypesView> {
             final columns = constraints.maxWidth >= 1100 ? 4 : constraints.maxWidth >= 760 ? 3 : constraints.maxWidth >= 520 ? 2 : 1;
             return GridView.builder(
               shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: _types.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: columns, mainAxisSpacing: 14, crossAxisSpacing: 14, mainAxisExtent: 150),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns, 
+                mainAxisSpacing: 14, 
+                crossAxisSpacing: 14, 
+                // 🌟 核心修复：提升了卡片的固定高度，从 150 增加到 175，防止内部元件相互拥挤导致底部溢出
+                mainAxisExtent: 175 
+              ),
               itemBuilder: (_, index) {
                 final item = _types[index];
                 return Container(

@@ -93,3 +93,11 @@ Route::middleware('auth:api')->group(function () {
 
 // 建立图片读取的 API 代理路由
 Route::get('/images/{filename}', [App\Http\Controllers\ProfileController::class, 'serveImage']);
+
+Route::get('/test-connection', function () {
+    return response()->json([
+        'status' => 'success',
+        'message' => '物理网络与后端服务已完全连通！',
+        'time' => now()->toDateTimeString()
+    ]);
+});

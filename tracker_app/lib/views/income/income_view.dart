@@ -353,7 +353,8 @@ class _IncomeViewState extends State<IncomeView> {
       children: [
         _customSearchField(),
         const SizedBox(height: 12),
-        Row(children: [ Expanded(child: _customDateField(_startDate, 'Start')), const SizedBox(width: 12), Expanded(child: _customDateField(_endDate, 'End')) ]),
+        // 🌟 核心修改点：将 'Start' 改为 'Start Date'，将 'End' 改为 'End Date'
+        Row(children: [ Expanded(child: _customDateField(_startDate, 'Start Date')), const SizedBox(width: 12), Expanded(child: _customDateField(_endDate, 'End Date')) ]),
         const SizedBox(height: 12),
         _customDropdown(_categoryId, 'All Categories', _categories, (value) { setState(() { _categoryId = value; _page = 1; }); _load(); }),
         const SizedBox(height: 12),

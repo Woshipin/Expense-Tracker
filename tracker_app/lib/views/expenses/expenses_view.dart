@@ -354,7 +354,7 @@ class _ExpenseListViewState extends State<ExpenseListView> {
       children: [
         _customSearchField(),
         const SizedBox(height: 12),
-        Row(children: [ Expanded(child: _customDateField(_startDate, 'Start')), const SizedBox(width: 12), Expanded(child: _customDateField(_endDate, 'End')) ]),
+        Row(children: [ Expanded(child: _customDateField(_startDate, 'Start Date')), const SizedBox(width: 12), Expanded(child: _customDateField(_endDate, 'End Date')) ]),
         const SizedBox(height: 12),
         _customDropdown(_categoryId, 'All Categories', _categories, (value) { setState(() { _categoryId = value; _page = 1; }); _load(); }),
         const SizedBox(height: 12),

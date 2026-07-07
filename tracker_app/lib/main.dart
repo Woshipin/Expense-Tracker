@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_web_plugins/url_strategy.dart'; 
 import 'core/constants/colors.dart';
 import 'core/api/api_client.dart'; 
 import 'views/auth/splash_view.dart';
@@ -9,11 +8,14 @@ import 'views/auth/forgot_password_view.dart';
 import 'views/auth/reset_password_view.dart';
 import 'views/main_layout.dart';
 
+// 🌟 核心修复：根据编译平台条件导入。Web 端导入 web.dart，手机端自动导入 non_web.dart，彻底解决手机端因 Web 依赖无法编译的问题。
+import 'url_strategy_non_web.dart' if (dart.library.html) 'url_strategy_web.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 去除 Web 端的 URL 哈希 `#` 号，让网址变成标准的路径
-  usePathUrlStrategy(); 
+  // 🌟 核心修复：调用条件初始化的 URL 策略（手机端安全忽略，Web 端正常生效）
+  configureUrlStrategy(); 
   
   // 在 APP 启动前，自动测试并绑定可用的后端 IP
   await ApiClient().findWorkingUrl(); 
