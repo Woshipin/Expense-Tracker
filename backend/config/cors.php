@@ -21,10 +21,14 @@ return [
 
     // 'allowed_origins' => ['*'],
 
-    // 【修改】将原来的 ['*'] 改为你的 Next.js 前端地址。
-    // 原因：当 supports_credentials 设置为 true 时，浏览器出于安全要求，不允许 allowed_origins 为通配符 '*'。
-    // 必须明确指定允许跨域的域名（如果你部署到线上环境，记得把线上的域名也加到这个数组里）。
+    // 【修改】在此处加入您的 Vercel 线上前端域名支持。同时保留您原有的全部本地/局域网联调配置。
     'allowed_origins' => [
+        // 动态读取 Railway 上的 FRONTEND_URL 环境变量，方便后续迁移或修改域名
+        env('FRONTEND_URL', 'http://localhost:3000'), 
+        
+        // 显式硬编码您的 Vercel 生产环境域名，确保线上环境 100% 畅通
+        'https://expense-tracker-six-zeta-43.vercel.app', 
+
         'http://localhost:3000',
         'http://127.0.0.1:3000',       
         
@@ -57,8 +61,7 @@ return [
 
     // 'supports_credentials' => false,
 
-    // 【修改】将原来的 false 改为 true。
-    // 原因：因为我们要通过 HttpOnly Cookie 传递 JWT Token。
+    // 【保持 true】因为我们要通过 HttpOnly Cookie 传递 JWT Token。
     // 只有把这个设为 true，前端 axios 请求（开启 withCredentials 后）才能成功带上 Cookie 与后端通信。
     'supports_credentials' => true,
 
