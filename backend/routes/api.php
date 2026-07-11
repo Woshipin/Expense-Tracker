@@ -20,6 +20,8 @@ Route::post('/login', [AuthController::class, 'login']);
 // 【修改】Laravel Socialite 专用的两个第三方登录路由
 Route::get('/auth/{provider}', [AuthController::class, 'redirectToProvider']);
 Route::get('/auth/{provider}/callback', [AuthController::class, 'handleProviderCallback']);
+// 【新增】专供手机 App 用的 Token 验证路由 (POST 请求)
+Route::post('auth/{provider}/app', [AuthController::class, 'appSocialLogin']);
 
 // 【新增】忘记密码 & 重置密码 路由
 Route::post('/forgot-password', [AuthController::class, 'sendResetLinkEmail']);

@@ -60,6 +60,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
+   # 🌟 新增：自动生成桌面图标的开发依赖工具
+  flutter_launcher_icons: ^0.13.1
+
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 
@@ -70,6 +74,17 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # 🌟 新增：注册资源目录，使 Flutter 能够识别您的 icon.png
+  assets:
+    - assets/icon.png
+
+# 🌟 必须和上面的 flutter: 垂直顶格对齐（0 个空格）
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon.png"
+  min_sdk_android: 21
 
   # To add assets to your application, add an assets section, like this:
   # assets:

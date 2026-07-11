@@ -128,6 +128,66 @@ class AuthController extends Controller
     }
 
     // ==========================================
+    // 专供 Mobile App (Flutter/React Native) 使用的第三方登录 API
+    // ==========================================
+    public function appSocialLogin(Request $request, $provider)
+    {
+        // 1. 验证渠道是否合法
+        if (!in_array($provider, ['google', 'facebook'])) {
+            return response()->json(['error' => 'Invalid provider (无效的登录渠道)'], 400);
+        }
+
+        // 2. 验证 App 端传来的 token
+        $request->validate([
+            'token' => 'required|string', // 这是手机 App 从 Google/FB 原生 SDK 拿到的 access_token / id_token
+        ]);
+
+        try {
+            // 3. 使用 Socialite 验证 token 的真实性并获取用户信息
+            $socialUser = Socialite::driver($provider)->stateless()->userFromToken($request->token);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Invalid ' . ucfirst($provider) . ' Token (Token 无效或已过期)'], 401);
+        }
+
+        // 4. 查找或创建用户
+        $user = User::where('email', $socialUser->getEmail())->first();
+
+        if (!$user) {
+            $user = User::create([
+                'full_name'   => $socialUser->getName() ?? 'User',
+                'email'       => $socialUser->getEmail(),
+                'password'    => null, 
+                'provider'    => $provider,
+                'provider_id' => $socialUser->getId(),
+                'image_path'  => $socialUser->getAvatar(),
+            ]);
+        } else {
+            // 如果用户已存在但没有头像，顺便更新头像
+            if (!$user->image_path) {
+                $user->update(['image_path' => $socialUser->getAvatar()]);
+            }
+        }
+
+        // 5. 检查账号状态
+        if ($user->status === User::STATUS_INACTIVE) {
+            return response()->json(['error' => 'Account is banned or inactive (账号被封禁)'], 403);
+        }
+
+        // 6. 生成你的后端 JWT Token
+        $token = auth('api')->login($user);
+        $ttl = auth('api')->factory()->getTTL();
+
+        // 7. 返回纯 JSON 数据给手机 App（不需要设置 Cookie）
+        return response()->json([
+            'message'      => 'Login successful',
+            'user'         => $user,
+            'access_token' => $token,
+            'token_type'   => 'bearer',
+            'expires_in'   => $ttl * 60
+        ]);
+    }
+
+    // ==========================================
     // 密码重置逻辑 (Forgot / Reset Password)
     // ==========================================
 
