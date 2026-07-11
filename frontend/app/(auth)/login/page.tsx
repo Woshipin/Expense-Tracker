@@ -136,15 +136,13 @@ export default function LoginPage() {
         rememberMe: formData.rememberMe, 
       });
 
-      // 电脑网站端 (端口号是 3000) 依然保持使用原生的 Cookie 进行鉴权。
-      // 只有在手机原生 App 环境下（检测没有 3000 开发端口）运行时，我们才将 token 保存到 localStorage，启用无缝的 JWT Header 模式。
+      // Cookie 鉴权
       if (response.data && response.data.access_token) {
         if (typeof window !== "undefined" && window.location.port !== "3000") {
           localStorage.setItem("auth_token", response.data.access_token);
         }
       }
 
-      // 登录成功后，根据勾选状态更新 LocalStorage
       if (formData.rememberMe) {
         localStorage.setItem("rememberedEmail", formData.email);
         localStorage.setItem("rememberedPassword", formData.password);
@@ -155,10 +153,8 @@ export default function LoginPage() {
         localStorage.setItem("isRemembered", "false");
       }
 
-      // 【修改】：展示 1.5 秒的登录成功 Toast 提示
       setToast({ message: "Login successful! Redirecting...", type: "success" });
 
-      // 【修改】：等待 1.5 秒（即等 Toast 显示完毕后）再跳转至控制台
       setTimeout(() => {
         router.push("/dashboard");
       }, 1500);
@@ -199,11 +195,41 @@ export default function LoginPage() {
     }));
   };
 
-  // 找到并修改 handleSocialLoginClick 函数：
+  // 已改进：具备生产环境自动跳转的社群登录逻辑
   const handleSocialLoginClick = (provider: string) => {
     setIsLoading(true);
 
-    const baseURL = api.defaults.baseURL || "http://192.168.0.152:8000/api";
+    // 1. 优先获取 Vercel 配置的生产环境 API 变量
+    let baseURL = process.env.NEXT_PUBLIC_API_URL;
+
+    // 2. 如果未配置，则尝试从 axios 实例中获取
+    if (!baseURL) {
+      baseURL = api.defaults.baseURL as string;
+    }
+
+    // 3. 容错逻辑：如果在浏览器中且地址仍为本地地址，则做环境判定
+    if (!baseURL || baseURL.includes("127.0.0.1") || baseURL.includes("localhost")) {
+      if (typeof window !== "undefined") {
+        const currentHost = window.location.hostname;
+        const protocol = window.location.protocol;
+
+        // 仅在本地开发环境中拼接 8000 端口
+        if (currentHost === "localhost" || currentHost.includes("192.168") || currentHost.includes("10.200")) {
+          baseURL = `${protocol}//${currentHost}:8000/api`;
+        } else {
+          // 线上生产环境，强制重定向到您的 Railway 生产环境接口
+          baseURL = "https://expense-tracker-production-b2b0.up.railway.app/api";
+        }
+      }
+    }
+
+    // 保证 api 后缀格式统一
+    if (baseURL && !baseURL.endsWith("/api")) {
+      baseURL = `${baseURL.replace(/\/$/, "")}/api`;
+    }
+    baseURL = baseURL?.replace(/\/$/, "") || "";
+
+    // 拼装授权接口并重定向
     window.location.href = `${baseURL}/auth/${provider.toLowerCase()}`;
   };
 
@@ -420,4 +446,3 @@ export default function LoginPage() {
     </>
   );
 }
-
