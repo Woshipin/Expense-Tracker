@@ -85,7 +85,7 @@ class FacebookLogo extends StatelessWidget {
       ),
       alignment: Alignment.center,
       child: Icon(
-        Icons.facebook, // 替换为 Material 的 facebook 图标
+        Icons.facebook, 
         size: size * 0.7,
         color: Colors.white,
       ),
@@ -135,7 +135,7 @@ class _LoginViewState extends State<LoginView> {
     final Uri url = Uri.parse(apiUrl);
 
     try {
-      // 【修改】：使用最安全、支持 Web 端弹出新标签页的 platformDefault 模式
+      // 采用最安全、支持移动端及网页端弹出新标签页的 platformDefault 模式
       await launchUrl(url, mode: LaunchMode.platformDefault);
     } catch (e) {
       if (mounted) {

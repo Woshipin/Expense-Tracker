@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-// 引入 useSearchParams 用于捕获后端重定向回来的错误参数
+// 引入 useSearchParams 用于捕获后端重定向回来的错误或 token 参数
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -85,8 +85,22 @@ export default function LoginPage() {
   });
   const [errors, setErrors] = useState<any>({});
 
-  // 监听并捕获后端 Socialite 回调传过来的错误代码
+  // 🌟 【核心修复】：监听并捕获后端第三方成功登录后重定向附带的 token，并自动完成登录跳转
   useEffect(() => {
+    const token = searchParams.get("token");
+    if (token) {
+      localStorage.setItem("auth_token", token); // 保存至本地作为 API 的 Bearer 认证凭证
+      setToast({
+        message: "Social login successful! Syncing dashboard...",
+        type: "success",
+      });
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 1500);
+      return;
+    }
+
+    // 捕获可能传递回来的错误
     const error = searchParams.get("error");
     if (error === "social_auth_failed") {
       setToast({
@@ -99,7 +113,7 @@ export default function LoginPage() {
         type: "error",
       });
     }
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   // 组件挂载时，从 LocalStorage 恢复 "Remember Me" 状态、邮箱和密码
   useEffect(() => {
@@ -111,8 +125,8 @@ export default function LoginPage() {
       setFormData((prev) => ({
         ...prev,
         email: savedEmail,
-        password: savedEmail ? (savedEmail === "ahpin7762@gmail.com" ? "Pin@776253" : savedPassword || "") : "", // 演示主密码自动填充
-        rememberMe: true, // 恢复勾选状态
+        password: savedEmail ? (savedEmail === "ahpin7762@gmail.com" ? "Pin@776253" : savedPassword || "") : "", 
+        rememberMe: true, 
       }));
     } else {
       setFormData((prev) => ({
@@ -136,11 +150,9 @@ export default function LoginPage() {
         rememberMe: formData.rememberMe, 
       });
 
-      // Cookie 鉴权
+      // 提取并保存 Token
       if (response.data && response.data.access_token) {
-        if (typeof window !== "undefined" && window.location.port !== "3000") {
-          localStorage.setItem("auth_token", response.data.access_token);
-        }
+        localStorage.setItem("auth_token", response.data.access_token);
       }
 
       if (formData.rememberMe) {
@@ -195,41 +207,34 @@ export default function LoginPage() {
     }));
   };
 
-  // 已改进：具备生产环境自动跳转的社群登录逻辑
+  // 已经过线上环境适配的社群登录重定向
   const handleSocialLoginClick = (provider: string) => {
     setIsLoading(true);
 
-    // 1. 优先获取 Vercel 配置的生产环境 API 变量
     let baseURL = process.env.NEXT_PUBLIC_API_URL;
 
-    // 2. 如果未配置，则尝试从 axios 实例中获取
     if (!baseURL) {
       baseURL = api.defaults.baseURL as string;
     }
 
-    // 3. 容错逻辑：如果在浏览器中且地址仍为本地地址，则做环境判定
     if (!baseURL || baseURL.includes("127.0.0.1") || baseURL.includes("localhost")) {
       if (typeof window !== "undefined") {
         const currentHost = window.location.hostname;
         const protocol = window.location.protocol;
 
-        // 仅在本地开发环境中拼接 8000 端口
         if (currentHost === "localhost" || currentHost.includes("192.168") || currentHost.includes("10.200")) {
           baseURL = `${protocol}//${currentHost}:8000/api`;
         } else {
-          // 线上生产环境，强制重定向到您的 Railway 生产环境接口
           baseURL = "https://expense-tracker-production-b2b0.up.railway.app/api";
         }
       }
     }
 
-    // 保证 api 后缀格式统一
     if (baseURL && !baseURL.endsWith("/api")) {
       baseURL = `${baseURL.replace(/\/$/, "")}/api`;
     }
     baseURL = baseURL?.replace(/\/$/, "") || "";
 
-    // 拼装授权接口并重定向
     window.location.href = `${baseURL}/auth/${provider.toLowerCase()}`;
   };
 

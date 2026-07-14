@@ -6,8 +6,9 @@ class ApiClient {
   static final ApiClient _instance = ApiClient._internal();
   late Dio dio;
   
-  // 默认兜底 URL（如果所有探测都失败了，最后使用它）
-  String currentBaseUrl = "http://127.0.0.1:8000/api";
+  // 默认生产环境线上 URL (作为初始及最后的备份兜底)
+  String currentBaseUrl = "https://expense-tracker-production-b2b0.up.railway.app/api";
+  bool isDetected = false;
 
   factory ApiClient() => _instance;
 
@@ -34,46 +35,85 @@ class ApiClient {
     ));
   }
 
-  // 【核心修改】：为了对接后端的 Google/Facebook 授权，将局域网 IP 全部对齐为 .nip.io 域名
-  final List<String> _candidateUrls = [
-    "http://127.0.0.1:8000/api",                     // 1. 电脑模拟器本地
-    "http://192.168.0.152.nip.io:8000/api",          // 2. 新山 Wi-Fi (对齐 .nip.io)
-    "http://192.168.0.132.nip.io:8000/api",          // 3. Ah Wi-Fi (对齐 .nip.io)
-    "http://10.200.242.154.nip.io:8000/api",         // 4. 手机个人热点 (对齐 .nip.io)
+  // 1. 本地局域网开发候选 IP 队列
+  final List<String> _localCandidateUrls = [
+    "http://127.0.0.1:8000/api",                     // 电脑模拟器本地
+    "http://192.168.0.132.nip.io:8000/api",          // Ah Wi-Fi (对齐 .nip.io)
+    "http://192.168.0.152.nip.io:8000/api",          // 新山 Wi-Fi (对齐 .nip.io)
+    "http://10.200.242.154.nip.io:8000/api",         // 手机个人热点 (对齐 .nip.io)
   ];
 
-  /// 异步自动雷达探测函数
+  // 2. 生产环境真实的线上 Railway API 接口地址
+  final String _productionUrl = "https://expense-tracker-production-b2b0.up.railway.app/api";
+
+  /// 智能自适应雷达探测（已优化：首要尝试直连线上 Deployed API，无网或失败时才退回探测本地）
   Future<void> findWorkingUrl() async {
+    if (isDetected) {
+      return;
+    }
+
     final tempDio = Dio(BaseOptions(
-      connectTimeout: const Duration(milliseconds: 1500), // 1.5秒快速超时
+      connectTimeout: const Duration(milliseconds: 2000), // 2秒超时，保证极速响应
     ));
 
-    for (String url in _candidateUrls) {
+    // =====================================================================
+    // 步骤一：【首要判定】优先测试线上生产环境 (已经部署的 API)
+    // =====================================================================
+    try {
+      debugPrint("[雷达探测] 🚀 正在优先测试线上 Deployed API: $_productionUrl ...");
+      await tempDio.get('$_productionUrl/me'); 
+      
+      currentBaseUrl = _productionUrl;
+      dio.options.baseUrl = currentBaseUrl;
+      isDetected = true;
+      debugPrint("✅ [连接成功] 线上 API 可用，已瞬间锁定并跳过局域网探测: $currentBaseUrl");
+      return;
+    } catch (e) {
+      // 允许未登录状态的 401 或 403 视为网络畅通并锁定
+      if (e is DioException && e.response != null) {
+        if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
+          currentBaseUrl = _productionUrl;
+          dio.options.baseUrl = currentBaseUrl;
+          isDetected = true;
+          debugPrint("✅ [连接成功] 线上 API 校验通过并锁定: $currentBaseUrl");
+          return;
+        }
+      }
+      debugPrint("❌ [连接失败] 线上 Deployed API 暂时不可达，开始尝试本地局域网节点...");
+    }
+
+    // =====================================================================
+    // 步骤二：【备用方案】线上不通时，才开始逐个探测本地局域网
+    // =====================================================================
+    for (String url in _localCandidateUrls) {
       try {
-        debugPrint("[雷达探测] 正在连接 API: $url ...");
-        
-        // 探测 /me 路径
+        debugPrint("[雷达探测] 正在连接本地 API: $url ...");
         await tempDio.get('$url/me'); 
         
         currentBaseUrl = url;
         dio.options.baseUrl = currentBaseUrl;
-        debugPrint("✅ [连接成功] 已成功锁定并绑定 API: $currentBaseUrl");
+        isDetected = true;
+        debugPrint("✅ [连接成功] 已锁定本地 API: $currentBaseUrl");
         return; 
       } catch (e) {
-        // 允许未登录状态的 401/403 视为物理连通
         if (e is DioException && e.response != null) {
           if (e.response?.statusCode == 401 || e.response?.statusCode == 403) {
             currentBaseUrl = url;
             dio.options.baseUrl = currentBaseUrl;
-            debugPrint("✅ [连接成功] 已锁定 API: $currentBaseUrl (跨域及网络通畅，状态码: ${e.response?.statusCode})");
+            isDetected = true;
+            debugPrint("✅ [连接成功] 已锁定本地 API: $currentBaseUrl (本地安全校验锁定)");
             return;
           }
         }
-        
-        debugPrint("❌ [连接失败] 节点不可达: $url");
+        debugPrint("❌ [连接失败] 本地节点不可达: $url");
         continue;
       }
     }
-    debugPrint("⚠️ [探测结束] 所有局域网节点均不可达，使用默认备用: $currentBaseUrl");
+
+    // 终极回退
+    currentBaseUrl = _productionUrl;
+    dio.options.baseUrl = currentBaseUrl;
+    isDetected = true;
+    debugPrint("⚠️ [探测结束] 所有节点均不可达，已自动回归线上备用: $currentBaseUrl");
   }
 }
