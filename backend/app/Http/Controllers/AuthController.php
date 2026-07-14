@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Cookie;
 use Laravel\Socialite\Facades\Socialite;
-use Illuminate\Support\Facades\Password; // 【新增】用于密码重置
-use Illuminate\Auth\Events\PasswordReset; // 【新增】用于触发密码重置成功事件
+use Illuminate\Support\Facades\Password; // 用于密码重置
+use Illuminate\Auth\Events\PasswordReset; // 用于触发密码重置成功事件
 
 class AuthController extends Controller
 {
@@ -63,7 +63,7 @@ class AuthController extends Controller
     }
 
     // ==========================================
-    // Laravel Socialite 核心逻辑开始
+    // Laravel Socialite 核心逻辑
     // ==========================================
 
     public function redirectToProvider($provider)
@@ -118,13 +118,10 @@ class AuthController extends Controller
         }
 
         $token = auth('api')->login($user);
-        $ttl = auth('api')->factory()->getTTL();
-
-        $cookie = cookie(
-            'jwt_token', $token, $ttl, '/', null, env('APP_ENV') === 'production', true, false, 'Lax'
-        );
-
-        return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/dashboard')->withCookie($cookie);
+        
+        // 💡 【核心修复】：为避免浏览器由于安全策略拦截跨域 Cookie 写入，我们不采用 withCookie 传递，
+        // 而是直接通过 URL 参数将 Token 返回给前端。之前修改的前端 LoginPage 会无感捕获该 token 并写入 localStorage。
+        return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?token=' . $token);
     }
 
     // ==========================================
@@ -132,24 +129,20 @@ class AuthController extends Controller
     // ==========================================
     public function appSocialLogin(Request $request, $provider)
     {
-        // 1. 验证渠道是否合法
         if (!in_array($provider, ['google', 'facebook'])) {
             return response()->json(['error' => 'Invalid provider (无效的登录渠道)'], 400);
         }
 
-        // 2. 验证 App 端传来的 token
         $request->validate([
-            'token' => 'required|string', // 这是手机 App 从 Google/FB 原生 SDK 拿到的 access_token / id_token
+            'token' => 'required|string', 
         ]);
 
         try {
-            // 3. 使用 Socialite 验证 token 的真实性并获取用户信息
             $socialUser = Socialite::driver($provider)->stateless()->userFromToken($request->token);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Invalid ' . ucfirst($provider) . ' Token (Token 无效或已过期)'], 401);
         }
 
-        // 4. 查找或创建用户
         $user = User::where('email', $socialUser->getEmail())->first();
 
         if (!$user) {
@@ -162,22 +155,18 @@ class AuthController extends Controller
                 'image_path'  => $socialUser->getAvatar(),
             ]);
         } else {
-            // 如果用户已存在但没有头像，顺便更新头像
             if (!$user->image_path) {
                 $user->update(['image_path' => $socialUser->getAvatar()]);
             }
         }
 
-        // 5. 检查账号状态
         if ($user->status === User::STATUS_INACTIVE) {
             return response()->json(['error' => 'Account is banned or inactive (账号被封禁)'], 403);
         }
 
-        // 6. 生成你的后端 JWT Token
         $token = auth('api')->login($user);
         $ttl = auth('api')->factory()->getTTL();
 
-        // 7. 返回纯 JSON 数据给手机 App（不需要设置 Cookie）
         return response()->json([
             'message'      => 'Login successful',
             'user'         => $user,
@@ -191,14 +180,10 @@ class AuthController extends Controller
     // 密码重置逻辑 (Forgot / Reset Password)
     // ==========================================
 
-    /**
-     * 发送重置密码邮件
-     */
     public function sendResetLinkEmail(Request $request)
     {
         $request->validate(['email' => 'required|email']);
 
-        // 检查该邮箱是否是第三方快捷登录（没密码）的用户，防止他们误操作
         $user = User::where('email', $request->email)->first();
         if ($user && $user->provider) {
             return response()->json([
@@ -206,7 +191,6 @@ class AuthController extends Controller
             ], 400);
         }
 
-        // 调用 Laravel 底层 Broker 发送带 Token 的邮件
         $status = Password::broker()->sendResetLink(
             $request->only('email')
         );
@@ -216,15 +200,12 @@ class AuthController extends Controller
                     : response()->json(['message' => __($status)], 400);
     }
 
-    /**
-     * 执行密码重置
-     */
     public function resetPassword(Request $request)
     {
         $request->validate([
             'token' => 'required',
             'email' => 'required|email',
-            'password' => 'required|min:6|confirmed', // 要求前端必须传 password_confirmation
+            'password' => 'required|min:6|confirmed', 
         ]);
 
         $status = Password::broker()->reset(
