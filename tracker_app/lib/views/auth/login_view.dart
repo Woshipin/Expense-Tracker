@@ -135,7 +135,7 @@ class _LoginViewState extends State<LoginView> {
     final Uri url = Uri.parse(apiUrl);
 
     try {
-      // 采用最安全、支持移动端及网页端弹出新标签页的 platformDefault 模式
+      // 采用支持移动端及网页端弹出新标签页的 platformDefault 模式
       await launchUrl(url, mode: LaunchMode.platformDefault);
     } catch (e) {
       if (mounted) {

@@ -1,3 +1,4 @@
+// lib/views/main_layout.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/api/api_client.dart';
@@ -28,7 +29,7 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
   bool _isSettingsExpanded = false;
-  bool _isSidebarOpen = true; // 控制侧边栏展开/收起
+  bool _isSidebarOpen = true; // 控制电脑端侧边栏展开/收起
   
   Map<String, dynamic>? _currentUser;
   bool _isLoadingUser = true;
@@ -125,7 +126,7 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
-  // 🌟 侧边栏切换按钮组件 (纯白背景，橙色边框，微弱阴影)
+  // 电脑端侧边栏切换按钮组件
   Widget _buildToggleButton({required bool isOpen}) {
     return Material(
       color: Colors.transparent,
@@ -135,10 +136,10 @@ class _MainLayoutState extends State<MainLayout> {
         child: Container(
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
-            color: Colors.white, // 纯白底色
+            color: Colors.white, 
             shape: BoxShape.circle,
             border: Border.all(
-              color: SunsetColors.primary, // 橙色边框
+              color: SunsetColors.primary, 
               width: 1.5,
             ),
             boxShadow: [
@@ -200,11 +201,11 @@ class _MainLayoutState extends State<MainLayout> {
             backgroundColor: SunsetColors.bgStart,
             body: Row(
               children: [
-                // ---------------- 侧边栏 (Sidebar Desktop) ----------------
+                // ---------------- 电脑端侧边栏 (Sidebar Desktop) ----------------
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   curve: Curves.easeInOut,
-                  width: _isSidebarOpen ? 260 : 85, // 控制侧边栏宽度
+                  width: _isSidebarOpen ? 260 : 85, 
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFFFEE8DB), Color(0xFFFFFaf5)],
@@ -215,7 +216,6 @@ class _MainLayoutState extends State<MainLayout> {
                   ),
                   child: Column(
                     children: [
-                      // 🌟 Logo Header 区域 (智能排版，杜绝溢出)
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
                         child: _isSidebarOpen
@@ -237,7 +237,6 @@ class _MainLayoutState extends State<MainLayout> {
                                       ],
                                     ),
                                   ),
-                                  // 使用精美按钮 (展开状态)
                                   _buildToggleButton(isOpen: true),
                                 ],
                               )
@@ -250,24 +249,22 @@ class _MainLayoutState extends State<MainLayout> {
                                     child: const Text("+", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: SunsetColors.dark)),
                                   ),
                                   const SizedBox(height: 16),
-                                  // 使用精美按钮 (收起状态)
                                   _buildToggleButton(isOpen: false),
                                 ],
                               ),
                       ),
                       
-                      // 🌟 用户头像区域 (防溢出处理)
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: _isSidebarOpen ? 16.0 : 8.0),
                         child: Container(
-                          padding: EdgeInsets.all(_isSidebarOpen ? 12 : 12),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.5),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: SunsetColors.border.withValues(alpha: 0.5)),
                           ),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center, // 无论展开收起都保持居中
+                            mainAxisAlignment: MainAxisAlignment.center, 
                             children: [
                               CircleAvatar(
                                 radius: 18,
@@ -307,7 +304,6 @@ class _MainLayoutState extends State<MainLayout> {
                             _buildSidebarButton(title: "Budget", icon: Icons.pie_chart_outline, index: 6),
                             _buildSidebarButton(title: "Calendar", icon: Icons.calendar_today, index: 3),
                             
-                            // 闭合时，设置菜单变成单一按钮。点击后自动展开侧边栏并滑出子菜单
                             if (!_isSidebarOpen)
                               _buildSidebarButton(title: "Settings", icon: Icons.settings_outlined, index: 7, onTapOverride: () {
                                 setState(() {
@@ -341,35 +337,28 @@ class _MainLayoutState extends State<MainLayout> {
                     ],
                   ),
                 ),
-                // 右侧主内容区
                 Expanded(child: _pages[_currentIndex]),
               ],
             ),
           );
         } else {
-          // ---------------- 手机端 (Mobile View) ----------------
+          // ---------------- 📱 手机端 (Mobile View with Standard Full-width Navigation) ----------------
+          
+          // 核心调整：5个按钮固定显示在底部栏，且无视角色限制，始终可见
           List<BottomNavigationBarItem> bottomNavItems = [
             const BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: "Dash"),
+            const BottomNavigationBarItem(icon: Icon(Icons.receipt_long_outlined), label: "Expenses"),
+            const BottomNavigationBarItem(icon: Icon(Icons.attach_money_outlined), label: "Income"),
+            const BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_outlined), label: "AI"),
+            const BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: "Settings"),
           ];
-          List<int> bottomNavIndices = [0];
 
-          if (canSeeAiInsights) {
-            bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.auto_awesome), label: "AI"));
-            bottomNavIndices.add(1);
-          }
+          List<int> bottomNavIndices = [0, 4, 5, 1, -1];
 
-          bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: "Expenses"));
-          bottomNavIndices.add(4);
-
-          bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.attach_money), label: "Income"));
-          bottomNavIndices.add(5);
-
-          bottomNavItems.add(const BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: "Settings"));
-          bottomNavIndices.add(-1);
-
+          // 重新校准当前选中的 BottomNavigationBar 索引值，防止因 More 页引起的高亮错乱
           int bottomNavCurrentIndex = bottomNavIndices.indexOf(_currentIndex);
           if (bottomNavCurrentIndex == -1) {
-            bottomNavCurrentIndex = bottomNavIndices.length - 1;
+            bottomNavCurrentIndex = bottomNavIndices.length - 1; // 回退到高亮最右侧 Settings 键
           }
 
           return Scaffold(
@@ -380,6 +369,7 @@ class _MainLayoutState extends State<MainLayout> {
                 children: _pages,
               ),
             ),
+            // 改回原本的扁平式底栏设计
             bottomNavigationBar: BottomNavigationBar(
               currentIndex: bottomNavCurrentIndex,
               type: BottomNavigationBarType.fixed,
@@ -404,7 +394,7 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // 🌟 菜单按钮 (展开收起自适应排版)
+  // 电脑端菜单按钮
   Widget _buildSidebarButton({required String title, required IconData icon, required int index, Color? color, VoidCallback? onTapOverride}) {
     bool isSelected = _currentIndex == index;
     
@@ -448,7 +438,7 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // Desktop Sub Menu Button
+  // 电脑端 Settings 展开子菜单按钮
   Widget _buildSidebarSubButton({required String title, required IconData icon, required int index}) {
     bool isSelected = _currentIndex == index;
     return Padding(
@@ -471,7 +461,7 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // Mobile Bottom Sheet Button
+  // 手机端 Bottom Sheet 独立大按钮 (高圆角适配)
   Widget _buildMobileMenuButton({required String title, required IconData icon, required int index, Color? color}) {
     bool isSelected = _currentIndex == index;
     return Padding(
@@ -504,7 +494,7 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // Mobile Bottom Sheet Menu
+  // 手机端 Settings 弹出菜单
   void _showMobileSettingsMenu(String userName, String userRole, bool canSeeUsers) {
     showModalBottomSheet(
       context: context,
@@ -577,6 +567,7 @@ class _MainLayoutState extends State<MainLayout> {
                       ),
                       if (canSeeUsers)
                         _buildMobileMenuButton(title: "Users", icon: Icons.people_outline, index: 2),
+                      // 🌟 Budget 完美在 More/Settings 页面渲染
                       _buildMobileMenuButton(title: "Budget", icon: Icons.pie_chart_outline, index: 6),
                       _buildMobileMenuButton(title: "Calendar", icon: Icons.calendar_today, index: 3),
                       

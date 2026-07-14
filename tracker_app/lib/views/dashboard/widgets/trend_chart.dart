@@ -1,13 +1,34 @@
+// lib/views/dashboard/widgets/trend_chart.dart
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../../core/constants/colors.dart';
+import '../../../../core/constants/colors.dart';
 
 class TrendChart extends StatelessWidget {
-  const TrendChart({super.key});
+  final List<dynamic> chartData;
+  const TrendChart({super.key, required this.chartData});
 
   @override
   Widget build(BuildContext context) {
-    const days = ['Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue'];
+    if (chartData.isEmpty) {
+      return const Center(
+        child: Text("No trend data", style: TextStyle(color: Colors.grey, fontSize: 12)),
+      );
+    }
+
+    // 动态提取天数标签队列（例如 ['Wed', 'Thu']）
+    final List<String> days = chartData.map((item) => (item['name'] as String? ?? '')).toList();
+
+    // 映射支出数据 spots
+    final List<FlSpot> expenseSpots = List.generate(chartData.length, (index) {
+      final val = (chartData[index]['expense'] as num? ?? 0).toDouble();
+      return FlSpot(index.toDouble(), val);
+    });
+
+    // 映射收入数据 spots
+    final List<FlSpot> incomeSpots = List.generate(chartData.length, (index) {
+      final val = (chartData[index]['income'] as num? ?? 0).toDouble();
+      return FlSpot(index.toDouble(), val);
+    });
 
     return LineChart(
       LineChartData(
@@ -17,11 +38,12 @@ class TrendChart extends StatelessWidget {
             sideTitles: SideTitles(
               showTitles: true,
               getTitlesWidget: (value, meta) {
-                if (value.toInt() >= 0 && value.toInt() < days.length) {
+                int index = value.toInt();
+                if (index >= 0 && index < days.length) {
                   return Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
-                      days[value.toInt()],
+                      days[index],
                       style: TextStyle(color: SunsetColors.dark.withValues(alpha: 0.4), fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                   );
@@ -35,17 +57,20 @@ class TrendChart extends StatelessWidget {
           topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
         ),
         borderData: FlBorderData(show: false),
-        // 添加悬浮提示 Tooltip
+        // 🌟 核心优化：高保真自适应悬浮数据 Tooltip 设计
         lineTouchData: LineTouchData(
           touchTooltipData: LineTouchTooltipData(
-            // 修改后
             tooltipBgColor: Colors.white,
             tooltipRoundedRadius: 12,
             tooltipPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             getTooltipItems: (List<LineBarSpot> touchedSpots) {
               if (touchedSpots.isEmpty) return [];
               final dayIndex = touchedSpots[0].x.toInt();
+              if (dayIndex < 0 || dayIndex >= days.length) return [];
+              
               final dayName = days[dayIndex];
+              final expenseVal = (chartData[dayIndex]['expense'] as num? ?? 0).toDouble();
+              final incomeVal = (chartData[dayIndex]['income'] as num? ?? 0).toDouble();
 
               return [
                 LineTooltipItem(
@@ -53,33 +78,25 @@ class TrendChart extends StatelessWidget {
                   const TextStyle(color: SunsetColors.dark, fontWeight: FontWeight.bold, fontSize: 14),
                   children: [
                     TextSpan(
-                      text: 'Income : RM 0\n',
-                      style: TextStyle(color: SunsetColors.dark.withValues(alpha: 0.8), fontSize: 13, fontWeight: FontWeight.normal, height: 1.5),
+                      text: 'Income : RM ${incomeVal.toStringAsFixed(2)}\n',
+                      style: TextStyle(color: const Color(0xFF0D9488), fontSize: 13, fontWeight: FontWeight.normal, height: 1.5),
                     ),
                     TextSpan(
-                      text: 'Expense : RM ${touchedSpots[0].y.toInt()}',
-                      style: TextStyle(color: SunsetColors.dark.withValues(alpha: 0.8), fontSize: 13, fontWeight: FontWeight.normal, height: 1.5),
+                      text: 'Expense : RM ${expenseVal.toStringAsFixed(2)}',
+                      style: TextStyle(color: SunsetColors.expense, fontSize: 13, fontWeight: FontWeight.normal, height: 1.5),
                     ),
                   ],
                 ),
-                // 第二条线不需要重复显示外框，返回 null 即可
+                // 第二条收入线无需重复叠加 Tooltip
                 if (touchedSpots.length > 1) null,
               ].whereType<LineTooltipItem>().toList();
             },
           ),
         ),
         lineBarsData: [
-          // 支出线 (红色)
+          // 1. 支出折线 (红色)
           LineChartBarData(
-            spots: const [
-              FlSpot(0, 800),
-              FlSpot(1, 200),
-              FlSpot(2, 20),
-              FlSpot(3, 10),
-              FlSpot(4, 5),
-              FlSpot(5, 5),
-              FlSpot(6, 2),
-            ],
+            spots: expenseSpots,
             isCurved: true,
             color: SunsetColors.expense,
             barWidth: 3,
@@ -89,7 +106,7 @@ class TrendChart extends StatelessWidget {
               show: true,
               gradient: LinearGradient(
                 colors: [
-                  SunsetColors.expense.withValues(alpha: 0.3),
+                  SunsetColors.expense.withValues(alpha: 0.25),
                   SunsetColors.expense.withValues(alpha: 0.0),
                 ],
                 begin: Alignment.topCenter,
@@ -97,22 +114,25 @@ class TrendChart extends StatelessWidget {
               ),
             ),
           ),
-          // 收入线 (绿色)
+          // 2. 收入折线 (绿色)
           LineChartBarData(
-            spots: const [
-              FlSpot(0, 10),
-              FlSpot(1, 10),
-              FlSpot(2, 10),
-              FlSpot(3, 10),
-              FlSpot(4, 10),
-              FlSpot(5, 10),
-              FlSpot(6, 10),
-            ],
+            spots: incomeSpots,
             isCurved: true,
             color: SunsetColors.income,
             barWidth: 3,
             isStrokeCapRound: true,
             dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                colors: [
+                  SunsetColors.income.withValues(alpha: 0.25),
+                  SunsetColors.income.withValues(alpha: 0.0),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
           ),
         ],
       ),

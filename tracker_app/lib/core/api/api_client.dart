@@ -1,3 +1,4 @@
+// lib/core/api/api_client.dart
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
@@ -46,14 +47,15 @@ class ApiClient {
   // 2. 生产环境真实的线上 Railway API 接口地址
   final String _productionUrl = "https://expense-tracker-production-b2b0.up.railway.app/api";
 
-  /// 智能自适应雷达探测（已优化：首要尝试直连线上 Deployed API，无网或失败时才退回探测本地）
+  /// 智能自适应雷达探测
   Future<void> findWorkingUrl() async {
     if (isDetected) {
       return;
     }
 
+    // 给生产环境稍长的连接时间（4秒），防止冷启动解析超时
     final tempDio = Dio(BaseOptions(
-      connectTimeout: const Duration(milliseconds: 2000), // 2秒超时，保证极速响应
+      connectTimeout: const Duration(milliseconds: 4000), 
     ));
 
     // =====================================================================
@@ -66,7 +68,7 @@ class ApiClient {
       currentBaseUrl = _productionUrl;
       dio.options.baseUrl = currentBaseUrl;
       isDetected = true;
-      debugPrint("✅ [连接成功] 线上 API 可用，已瞬间锁定并跳过局域网探测: $currentBaseUrl");
+      debugPrint("✅ [连接成功] 线上 API 可用，已瞬间锁定并跳过本地探测: $currentBaseUrl");
       return;
     } catch (e) {
       // 允许未登录状态的 401 或 403 视为网络畅通并锁定
@@ -79,7 +81,9 @@ class ApiClient {
           return;
         }
       }
-      debugPrint("❌ [连接失败] 线上 Deployed API 暂时不可达，开始尝试本地局域网节点...");
+      // 💡 打印具体错误，以便在控制台中看清为什么第一次连接失败（例如：Timeout、Connection refused 等）
+      debugPrint("❌ [连接失败] 线上 Deployed API 暂时不可达，异常原因: $e");
+      debugPrint("开始尝试本地局域网节点...");
     }
 
     // =====================================================================
