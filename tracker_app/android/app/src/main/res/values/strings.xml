@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 你的 Facebook App ID -->
+    <string name="facebook_app_id">3477648742390425</string>
+    
+    <!-- 你刚刚复制的 32 位客户端口令 -->
+    <string name="facebook_client_token">05e1b7232a02cd8fe812d2f6c37fa5c7</string>
+    
+    <!-- fb + 你的 Facebook App ID -->
+    <string name="facebook_login_protocol_scheme">fb3477648742390425</string>
+</resources>

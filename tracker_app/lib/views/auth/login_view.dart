@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart'; 
 import 'package:dio/dio.dart'; 
+import 'package:google_sign_in/google_sign_in.dart'; // [新增] Google 原生登录 SDK
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; // [新增] FB 原生登录 SDK
+
 import '../../core/api/api_client.dart';
 import '../../core/constants/colors.dart';
 import '../../core/widgets/input.dart';
@@ -128,24 +130,77 @@ class _LoginViewState extends State<LoginView> {
     }
   }
 
-  /// 启动第三方社交登录授权
+  // =====================================================================
+  // 🚀 【完全重构：原生移动端第三方登录 API 逻辑】
+  // =====================================================================
   Future<void> _handleSocialLogin(String provider) async {
     setState(() => _isLoading = true);
-    final String apiUrl = "${ApiClient().currentBaseUrl}/auth/${provider.toLowerCase()}";
-    final Uri url = Uri.parse(apiUrl);
+    String? providerToken;
 
     try {
-      // 采用支持移动端及网页端弹出新标签页的 platformDefault 模式
-      await launchUrl(url, mode: LaunchMode.platformDefault);
-    } catch (e) {
-      if (mounted) {
-        SunsetToast.show(context, "Failed to start $provider login", type: SunsetToastType.error);
+      // 1. 调用手机原生层 SDK 获取第三方平台的授权 Token
+      if (provider == 'Google') {
+        final GoogleSignIn googleSignIn = GoogleSignIn();
+        await googleSignIn.signOut(); // 确保每次都能弹出选择账号
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+        
+        if (googleUser == null) {
+          // 用户手动取消了登录窗口
+          setState(() => _isLoading = false);
+          return;
+        }
+        
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        providerToken = googleAuth.accessToken; 
+        
+      } else if (provider == 'Facebook') {
+        final LoginResult result = await FacebookAuth.instance.login();
+        
+        if (result.status == LoginStatus.success) {
+          // 💡 修复：新版 flutter_facebook_auth 使用 tokenString 获取 token 字符串
+          providerToken = result.accessToken?.tokenString;
+        } else {
+          // 用户取消授权或异常
+          setState(() => _isLoading = false);
+          return;
+        }
       }
+
+      // 2. 将原生拿到的 Token 发送给 Laravel API (`/auth/{provider}/app`) 进行验证
+      if (providerToken != null) {
+        final response = await ApiClient().dio.post(
+          "/auth/${provider.toLowerCase()}/app", 
+          data: {
+            "token": providerToken,
+          },
+        );
+
+        // 3. 登录成功，从后端获取属于系统的 JWT Token，保存并跳转至原生 Dashboard
+        if (response.data != null && response.data['access_token'] != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString("auth_token", response.data['access_token']);
+          
+          if (mounted) {
+            SunsetToast.show(context, "$provider Login successful", type: SunsetToastType.success);
+            Future.delayed(const Duration(milliseconds: 1500), () {
+              Navigator.pushReplacementNamed(context, '/dashboard');
+            });
+          }
+        }
+      }
+    } on DioException catch (e) {
+      if (!mounted) return;
+      String errorMsg = e.response?.data['error'] ?? "Failed to authenticate with server";
+      SunsetToast.show(context, errorMsg, type: SunsetToastType.error);
+    } catch (e) {
+      if (!mounted) return;
+      SunsetToast.show(context, "Failed to start $provider login", type: SunsetToastType.error);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // 普通邮箱密码登录
   Future<void> _handleLogin() async {
     setState(() { _isLoading = true; _errors.clear(); });
     try {

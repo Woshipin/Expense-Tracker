@@ -138,32 +138,41 @@ class AuthController extends Controller
         ]);
 
         try {
+            // 核心功能：使用 userFromToken() 直接解析手机原生层传来的 Access Token
             $socialUser = Socialite::driver($provider)->stateless()->userFromToken($request->token);
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Invalid ' . ucfirst($provider) . ' Token (Token 无效或已过期)'], 401);
+            \Log::error("App Social Login Error ({$provider}): " . $e->getMessage());
+            return response()->json(['error' => 'Invalid ' . ucfirst($provider) . ' Token (凭证验证失败，请重试)'], 401);
         }
 
+        // 查找是否已存在该邮箱关联的用户
         $user = User::where('email', $socialUser->getEmail())->first();
 
         if (!$user) {
+            // 邮箱不存在，直接无感静默创建用户
             $user = User::create([
                 'full_name'   => $socialUser->getName() ?? 'User',
                 'email'       => $socialUser->getEmail(),
-                'password'    => null, 
+                'password'    => null, // 社交登录不需要密码
                 'provider'    => $provider,
                 'provider_id' => $socialUser->getId(),
                 'image_path'  => $socialUser->getAvatar(),
             ]);
         } else {
-            if (!$user->image_path) {
-                $user->update(['image_path' => $socialUser->getAvatar()]);
-            }
+            // 用户已存在，则绑定/更新最新头像和 Provider ID
+            $user->update([
+                'provider'    => $provider,
+                'provider_id' => $socialUser->getId(),
+                'image_path'  => $user->image_path ?: $socialUser->getAvatar(),
+            ]);
         }
 
+        // 判断用户是否被管理员封禁
         if ($user->status === User::STATUS_INACTIVE) {
             return response()->json(['error' => 'Account is banned or inactive (账号被封禁)'], 403);
         }
 
+        // 验证通过，颁发用于整个系统的 JWT 鉴权 Token 给 Flutter
         $token = auth('api')->login($user);
         $ttl = auth('api')->factory()->getTTL();
 
