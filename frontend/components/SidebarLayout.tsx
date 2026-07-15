@@ -2,7 +2,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, ReceiptText, PieChart, Settings, LogOut,
-  Calendar, DollarSign, BarChart3, MoreHorizontal, ChevronLeft,
+  Calendar, DollarSign, BarChart3, ChevronLeft,
   ChevronRight, Tags, CreditCard, Users, Loader2, Layers,
   ChevronDown, ChevronUp
 } from 'lucide-react';
@@ -99,10 +99,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
       localStorage.removeItem("auth_token");
       setIsLogoutModalOpen(false);
       
-      // 【修改】：在跳转前先显示成功登出的 Toast
+      // 在跳转前先显示成功登出的 Toast
       setToast({ message: "Logout successful! Redirecting to login...", type: 'success' });
       
-      // 【修改】：延迟 1.5 秒，让 Toast 完整显示完毕后再执行路由替换与用户态清空
+      // 延迟 1.5 秒，让 Toast 完整显示完毕后再执行路由替换与用户态清空
       setTimeout(() => {
         setUser(null);
         router.replace('/login');
@@ -148,20 +148,25 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/payment-methods',  label: 'Payment Methods',  icon: CreditCard },
   ];
 
+  // 📱 【核心调整】：完全对齐 Flutter Mobile 的底栏 5 键设计
   const mobileNavItems = [
     { id: '/dashboard',   label: 'Dash',      icon: LayoutDashboard },
     { id: '/expenses',    label: 'Expenses',  icon: ReceiptText },
     { id: '/income',      label: 'Income',    icon: DollarSign },
     { id: '/ai-insights', label: 'AI',        icon: BarChart3 },
-    { id: '/budget',      label: 'Budget',    icon: PieChart },
+    { id: 'settings_menu', label: 'Settings',  icon: Settings }, // 第5个按键改为了Settings
   ];
 
-  const moreMenuPaths = ['/users', '/calendar', '/profile', '/types', '/categories', '/payment-methods'];
+  // 判断当前页面是否是在底栏之外的“更多/系统设置”分类路径下
+  const moreMenuPaths = ['/users', '/calendar', '/budget', '/profile', '/types', '/categories', '/payment-methods'];
 
   const isActive = (id: string) =>
     safePathname === id || (safePathname.startsWith(id) && id !== '/');
 
   const isSettingsActive = settingsSubItems.some(i => isActive(i.id));
+
+  // 小米/Flutter 权限同理的权限判定，仅 0(Super Admin) 或 1(Admin) 可见用户管理
+  const canSeeUsers = user?.role === 0 || user?.role === 1;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-orange-100 flex selection:bg-sunset-primary/20">
@@ -303,36 +308,40 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation Bar */}
+      {/* 📱 Mobile Bottom Navigation Bar: 对齐 Flutter MainLayout 设计 */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-black/5 flex items-center justify-around px-2 z-50 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
         {mobileNavItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => router.push(item.id)}
-            className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${isActive(item.id) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500"}`}
+            onClick={() => {
+              if (item.id === 'settings_menu') {
+                setIsMobileMenuOpen(!isMobileMenuOpen);
+              } else {
+                router.push(item.id);
+                setIsMobileMenuOpen(false);
+              }
+            }}
+            className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${
+              item.id === 'settings_menu'
+                ? (isMobileMenuOpen || moreMenuPaths.some(p => pathname === p || pathname.startsWith(p)) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500")
+                : (isActive(item.id) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500")
+            }`}
           >
             <item.icon
               size={20}
-              strokeWidth={isActive(item.id) ? 2.5 : 2}
-              className={isActive(item.id) ? "text-orange-600 drop-shadow-sm" : ""}
+              strokeWidth={
+                item.id === 'settings_menu'
+                  ? (isMobileMenuOpen || moreMenuPaths.some(p => pathname === p || pathname.startsWith(p)) ? 2.5 : 2)
+                  : (isActive(item.id) ? 2.5 : 2)
+              }
+              className={item.id !== 'settings_menu' && isActive(item.id) ? "text-orange-600 drop-shadow-sm" : ""}
             />
             <span className="text-[10px] font-bold">{item.label}</span>
           </button>
         ))}
-
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${isMobileMenuOpen || moreMenuPaths.some(p => pathname === p || pathname.startsWith(p)) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500"}`}
-        >
-          <MoreHorizontal
-            size={20}
-            strokeWidth={isMobileMenuOpen || moreMenuPaths.some(p => pathname === p || pathname.startsWith(p)) ? 2.5 : 2}
-          />
-          <span className="text-[10px] font-bold">More</span>
-        </button>
       </div>
 
-      {/* Mobile More Menu Overlay */}
+      {/* 📱 Mobile More Menu Overlay: 完全对齐 Flutter Mobile 底栏设置抽屉 */}
       {isMobileMenuOpen && (
         <div
           className="md:hidden fixed inset-0 bg-sunset-dark/40 backdrop-blur-sm z-40"
@@ -342,6 +351,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             className="absolute bottom-16 right-4 w-64 bg-white rounded-3xl p-3 shadow-2xl border border-sunset-primary/10 animate-in slide-in-from-bottom-5"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* 顶栏个人信息板块 */}
             <div className="flex items-center gap-3 bg-gradient-to-br from-orange-50/50 to-red-50/50 p-3 rounded-2xl border border-orange-100 mb-2">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sunset-primary to-sunset-secondary flex items-center justify-center text-white font-bold shrink-0 shadow-sm text-lg uppercase">
                 {user?.full_name ? user.full_name.charAt(0) : 'U'}
@@ -354,46 +364,77 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </div>
             </div>
 
-            {[
-              { id: '/users',    label: 'Users',    icon: Users },
-              { id: '/calendar', label: 'Calendar', icon: Calendar },
-            ].map((item) => (
+            {/* FEATURES 独立功能区 */}
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest px-4 pt-1 pb-1">FEATURES</p>
+              
+              {canSeeUsers && (
+                <button
+                  onClick={() => { router.push('/users'); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/users') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Users size={18} strokeWidth={isActive('/users') ? 2.5 : 2}
+                      className={`${isActive('/users') ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
+                    <span>Users</span>
+                  </div>
+                  {isActive('/users') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+                </button>
+              )}
+
               <button
-                key={item.id}
-                onClick={() => { router.push(item.id); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl font-bold transition-all duration-200 group ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
+                onClick={() => { router.push('/budget'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/budget') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
               >
                 <div className="flex items-center gap-3">
-                  <item.icon size={18} strokeWidth={isActive(item.id) ? 2.5 : 2}
-                    className={`${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
-                  <span>{item.label}</span>
+                  <PieChart size={18} strokeWidth={isActive('/budget') ? 2.5 : 2}
+                    className={`${isActive('/budget') ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
+                  <span>Budget</span>
                 </div>
-                {isActive(item.id) && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+                {isActive('/budget') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
               </button>
-            ))}
+
+              <button
+                onClick={() => { router.push('/calendar'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/calendar') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <Calendar size={18} strokeWidth={isActive('/calendar') ? 2.5 : 2}
+                    className={`${isActive('/calendar') ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
+                  <span>Calendar</span>
+                </div>
+                {isActive('/calendar') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+              </button>
+            </div>
 
             <div className="my-1.5 mx-2 border-t border-dashed border-orange-100" />
-            <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest px-4 pb-1">Settings</p>
 
-            {settingsSubItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { router.push(item.id); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center justify-between gap-3 px-4 py-3 rounded-2xl font-bold transition-all duration-200 group ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
-              >
-                <div className="flex items-center gap-3">
-                  <item.icon size={18} strokeWidth={isActive(item.id) ? 2.5 : 2}
-                    className={`${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
-                  <span>{item.label}</span>
-                </div>
-                {isActive(item.id) && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
-              </button>
-            ))}
+            {/* SETTINGS 系统设置区 */}
+            <div className="space-y-0.5">
+              <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest px-4 pb-1">SETTINGS</p>
+              
+              {settingsSubItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { router.push(item.id); setIsMobileMenuOpen(false); }}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon size={18} strokeWidth={isActive(item.id) ? 2.5 : 2}
+                      className={`${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
+                    <span>{item.label}</span>
+                  </div>
+                  {isActive(item.id) && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+                </button>
+              ))}
+            </div>
 
-            <div className="my-1 border-t border-sunset-primary/5" />
+            <div className="my-1.5 mx-2 border-t border-dashed border-orange-100" />
+            
+            {/* 退出登录板块 */}
             <button
               onClick={() => { setIsMobileMenuOpen(false); setIsLogoutModalOpen(true); }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-semibold text-red-500 hover:bg-red-50 transition-all"
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all"
             >
               <LogOut size={18} />
               <span>Logout</span>
