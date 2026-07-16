@@ -11,11 +11,12 @@ const getInitials = (name: string) => {
   return !name ? "IN" : name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2); 
 };
 
-// 价格格式化
+// 找到文件顶部的 formatPrice 函数并替换
 const formatPrice = (price: any) => {
   const num = parseFloat(price);
-  if (isNaN(num)) return "0";
-  return num % 1 === 0 ? num.toString() : num.toFixed(2);
+  if (isNaN(num)) return "0.00";
+  // 修改处：取消整数不带小数的逻辑，统一格式化为两位小数（例如 10 变为 10.00）
+  return num.toFixed(2);
 };
 
 export default function IncomePage() {
@@ -142,11 +143,16 @@ export default function IncomePage() {
     setIsAddOpen(true);
   };
 
+  // 找到并修改 openEditModal 函数
   const openEditModal = (e: any) => {
     setErrors({});
     setFormData({ 
-      title: e.title, description: e.description || "", price: String(e.price), 
-      date: e.date, time: e.time.substring(0, 5), 
+      title: e.title, 
+      description: e.description || "", 
+      price: String(e.price), 
+      date: e.date, 
+      // 修改处：增加非空安全保护，防止 e.time 为空时 substring 报错
+      time: e.time ? e.time.substring(0, 5) : "00:00", 
       payment_method_id: String(e.payment_method_id), 
       category_id: String(e.category_id) 
     });
@@ -210,9 +216,9 @@ export default function IncomePage() {
                 <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-6 border border-orange-100 flex flex-col items-center justify-center gap-4 text-center h-full relative overflow-hidden">
                   <div className="absolute top-0 w-full h-24 bg-gradient-to-b from-orange-100/50 to-transparent"></div>
                   <div className="relative z-10 shrink-0">
-                    <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-[2rem] bg-gradient-to-br from-orange-500 to-red-500 text-white flex items-center justify-center font-bold text-3xl border-[3px] border-white shadow-lg">
+                    {/* <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-[2rem] bg-gradient-to-br from-orange-500 to-red-500 text-white flex items-center justify-center font-bold text-3xl border-[3px] border-white shadow-lg">
                       RM
-                    </div>
+                    </div> */}
                   </div>
                   <div className="relative z-10 mt-2">
                     <h3 className="font-extrabold text-sunset-dark text-xl sm:text-2xl leading-tight">{viewingIncome?.title}</h3>

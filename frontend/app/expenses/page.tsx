@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, Button, Input, Toast } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Receipt, Clock, RefreshCw, FilterX } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Receipt, Clock, RefreshCw, FilterX, Camera, UploadCloud } from "lucide-react";
 import api from "@/lib/axios";
 
-// 获取首字母缩写
 const getInitials = (name: string) => { 
   return !name ? "EX" : name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2); 
 };
@@ -24,6 +23,13 @@ export default function ExpensesPage() {
   const [editingExpense, setEditingExpense] = useState<any>(null);
   const [deletingExpense, setDeletingExpense] = useState<any>(null);
   
+  // 扫码收据 Modal State
+  const [isScanModalOpen, setIsScanModalOpen] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStartDate, setFilterStartDate] = useState("");
@@ -31,7 +37,6 @@ export default function ExpensesPage() {
   const [filterCategoryId, setFilterCategoryId] = useState("all");
   const [filterMethodId, setFilterMethodId] = useState("all");
 
-  // 【新增】：用于解决手机端 Date 占位符空白的焦点状态
   const [isStartFocused, setIsStartFocused] = useState(false);
   const [isEndFocused, setIsEndFocused] = useState(false);
 
@@ -138,8 +143,11 @@ export default function ExpensesPage() {
   const openEditModal = (e: any) => {
     setErrors({});
     setFormData({ 
-      title: e.title, description: e.description || "", price: String(e.price), 
-      date: e.date, time: e.time.substring(0, 5), 
+      title: e.title, 
+      description: e.description || "", 
+      price: String(e.price), 
+      date: e.date, 
+      time: e.time ? e.time.substring(0, 5) : "00:00", 
       payment_method_id: String(e.payment_method_id), 
       category_id: String(e.category_id) 
     });
@@ -164,7 +172,7 @@ export default function ExpensesPage() {
       if (error.response && error.response.status === 422) {
         setErrors(error.response.data.errors);
       } else {
-        showToast(error.response?.data?.message || error.response?.data?.error || "Operation failed.", "error");
+        showToast(error.response?.data?.message || "Operation failed.", "error");
       }
     } finally {
       setIsSaving(false);
@@ -178,14 +186,137 @@ export default function ExpensesPage() {
       setDeletingExpense(null);
       fetchExpenses();
     } catch (error: any) {
-      showToast(error.response?.data?.message || error.response?.data?.error || "Failed to delete expense", "error");
+      showToast(error.response?.data?.message || "Failed to delete expense", "error");
       setDeletingExpense(null);
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setReceiptFile(file);
+      setReceiptPreview(URL.createObjectURL(file));
+    }
+  };
+
+  // 【修改】：提交图片给 AI 进行扫描（带上用户本地时间）
+  const handleScanSubmit = async () => {
+    if (!receiptFile) return;
+    
+    setIsScanning(true);
+    const scanFormData = new FormData();
+    scanFormData.append('receipt_image', receiptFile);
+    
+    // 【关键修复】：获取用户设备当前真实的本地时间，传给后端作为兜底
+    const now = new Date();
+    const localDate = now.toLocaleDateString('en-CA'); // 格式 YYYY-MM-DD
+    const localTime = now.toTimeString().split(' ')[0].substring(0, 5); // 格式 HH:MM
+    scanFormData.append('client_date', localDate);
+    scanFormData.append('client_time', localTime);
+
+    try {
+      const response = await api.post('/expenses/scan', scanFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 45000 // 增加超时时间
+      });
+
+      setIsScanModalOpen(false);
+      setReceiptFile(null);
+      setReceiptPreview(null);
+      
+      showToast(response.data.message || 'Items saved successfully!', 'success');
+      setCurrentPage(1); 
+      fetchExpenses();
+
+    } catch (error: any) {
+      console.error(error);
+      showToast(error.response?.data?.message || 'Failed to scan receipt. Please try again.', 'error');
+    } finally {
+      setIsScanning(false);
     }
   };
 
   return (
     <>
       {toast && <div className="fixed top-4 right-4 z-[10000]"><Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /></div>}
+
+      {/* 0. Upload & Scan Receipt Modal */}
+      {isScanModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 pb-20 md:pb-6 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl sm:rounded-[2rem] shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden">
+            <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-sunset-primary/10 flex justify-between items-center shrink-0">
+              <h2 className="text-xl sm:text-2xl font-bold text-sunset-dark flex items-center gap-2">
+                <Camera size={24} className="text-orange-500" /> Scan Receipt
+              </h2>
+              <button 
+                onClick={() => { setIsScanModalOpen(false); setReceiptFile(null); setReceiptPreview(null); }} 
+                className="p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 transition-colors"
+                disabled={isScanning}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-5 sm:p-8 flex flex-col gap-4 items-center justify-center bg-orange-50/20">
+              {receiptPreview ? (
+                <div className="relative w-full max-w-[250px] aspect-[3/4] rounded-2xl overflow-hidden shadow-md border-2 border-orange-200">
+                  <img src={receiptPreview} alt="Receipt preview" className="w-full h-full object-cover" />
+                  <button 
+                    onClick={() => { setReceiptFile(null); setReceiptPreview(null); }}
+                    className="absolute top-2 right-2 bg-white/80 backdrop-blur text-red-500 p-1.5 rounded-full hover:bg-white"
+                    disabled={isScanning}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ) : (
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full border-2 border-dashed border-orange-300 hover:border-orange-500 bg-orange-50/50 hover:bg-orange-50 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors"
+                >
+                  <div className="w-16 h-16 rounded-full bg-orange-100 text-orange-500 flex items-center justify-center">
+                    <UploadCloud size={32} />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-sunset-dark">Click to upload receipt</p>
+                    <p className="text-xs font-medium text-sunset-dark/50 mt-1">Supports JPG, PNG (Max 5MB)</p>
+                  </div>
+                </div>
+              )}
+              
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleFileSelect} 
+                accept="image/*" 
+                capture="environment" 
+                className="hidden" 
+              />
+            </div>
+
+            <div className="px-5 sm:px-8 py-4 sm:py-5 border-t border-sunset-primary/10 flex justify-end gap-3 shrink-0 bg-gray-50/50 rounded-b-3xl">
+              <Button 
+                variant="ghost" 
+                onClick={() => { setIsScanModalOpen(false); setReceiptFile(null); setReceiptPreview(null); }} 
+                disabled={isScanning}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleScanSubmit} 
+                disabled={!receiptFile || isScanning}
+                className="bg-orange-500 text-white flex items-center gap-2 min-w-[120px] justify-center"
+              >
+                {isScanning ? (
+                  <><Loader2 size={16} className="animate-spin" /> Analyzing...</>
+                ) : (
+                  "Scan Now"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 1. View Expense Modal */}
       {viewingExpense && (
@@ -252,18 +383,28 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* 2. Add / Edit Expense Modal */}
+      {/* 2. Add / Edit Expense Modal (Reused for AI Review) */}
       {(isAddOpen || editingExpense) && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 pb-20 md:pb-6 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl xl:max-w-[950px] rounded-3xl sm:rounded-[2rem] shadow-2xl flex flex-col max-h-[calc(100vh-110px)] sm:max-h-[95vh] animate-in zoom-in-95 duration-200 overflow-hidden">
             <div className="px-5 sm:px-8 py-4 sm:py-6 border-b border-sunset-primary/10 flex justify-between items-center shrink-0">
-              <h2 className="text-xl sm:text-2xl font-bold text-sunset-dark">{editingExpense ? "Edit Expense" : "Add Expense"}</h2>
+              <h2 className="text-xl sm:text-2xl font-bold text-sunset-dark">
+                {editingExpense ? "Edit Expense" : formData.description === "Scanned via AI" ? "Review Scanned Expense" : "Add Expense"}
+              </h2>
               <button onClick={() => { setIsAddOpen(false); setEditingExpense(null); }} className="p-2 bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 transition-colors">
                 <X size={20} />
               </button>
             </div>
 
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
+              {/* 如果是 AI 扫描来的，给个小提示 */}
+              {!editingExpense && formData.description === "Scanned via AI" && (
+                <div className="mb-4 p-3 bg-blue-50 text-blue-700 text-xs font-medium rounded-xl border border-blue-100 flex items-center gap-2">
+                  <Camera size={16} className="text-blue-500" />
+                  Please review the AI extracted details below before saving.
+                </div>
+              )}
+
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 items-start">
                 <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-orange-100 flex flex-col gap-4 sm:gap-5">
                   <h3 className="text-xs sm:text-sm font-black text-sunset-dark/60 tracking-widest flex items-center">
@@ -378,13 +519,28 @@ export default function ExpensesPage() {
 
       {/* 主体页面内容 */}
       <div className="space-y-4 sm:space-y-6 animate-in fade-in zoom-in-95 duration-300">
+        
+        {/* 【修改】：顶部 Header 与双重自适应 Button 设计 */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-sunset-dark">Expenses</h1>
             <p className="text-sm font-medium text-sunset-dark/60 mt-1">Detailed view of your outgoing transactions.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600">
+          
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {/* Scan Receipt 按钮 */}
+            <Button 
+              onClick={() => setIsScanModalOpen(true)} 
+              className="flex-1 sm:flex-none px-4 py-2.5 text-sm h-auto flex items-center justify-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600"
+            >
+              <Camera size={16} className="mr-1.5 shrink-0" /> Scan Receipt
+            </Button>
+            
+            {/* Add Expense 按钮 */}
+            <Button 
+              onClick={openAddModal} 
+              className="flex-1 sm:flex-none px-4 py-2.5 text-sm h-auto flex items-center justify-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600"
+            >
               <Plus size={16} className="mr-1.5 shrink-0" /> Add Expense
             </Button>
           </div>
@@ -427,7 +583,6 @@ export default function ExpensesPage() {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full xl:w-auto xl:flex-1">
                 
-                {/* 【移动端完美修复】：增加动态类型，当未输入日期且没有焦点时，显示“Start Date”占位提示词 */}
                 <div className="relative flex items-center w-full">
                   <Input 
                     type={filterStartDate || isStartFocused ? "date" : "text"}
@@ -448,7 +603,6 @@ export default function ExpensesPage() {
                   )}
                 </div>
 
-                {/* 【移动端完美修复】：增加动态类型，当未输入日期且没有焦点时，显示“End Date”占位提示词 */}
                 <div className="relative flex items-center w-full">
                   <Input 
                     type={filterEndDate || isEndFocused ? "date" : "text"}

@@ -14,7 +14,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const pathname = usePathname();
   const router = useRouter();
   
-  // 为服务端渲染提供安全防空保护
   const safePathname = pathname || "";
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -26,7 +25,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
-  // 判断是否是免鉴权页面
   const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].includes(safePathname);
   
   const settingsSubPaths = ['/profile', '/types', '/categories', '/payment-methods'];
@@ -36,48 +34,77 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     if (isOnSettingsPage) setIsSettingsOpen(true);
   }, [isOnSettingsPage]);
 
+  // ==========================================
+  // 首次载入时的初始化
+  // ==========================================
   useEffect(() => {
     let isMounted = true;
 
-    const checkAuth = async () => {
-      // 【核心性能优化】：如果用户已经存在（已登录），且当前不是去登录页，直接无感放行
-      if (user && !isAuthPage) {
-        setIsCheckingAuth(false);
-        return;
-      }
-
+    const initializeAuth = async () => {
       try {
         await findWorkingApiURL();
-
         const response = await api.get('/me');
-        if (!isMounted) return;
-        
-        setUser(response.data);
-        
-        if (isAuthPage) {
-          router.replace('/dashboard');
-        } else {
-          setIsCheckingAuth(false);
+        if (isMounted) {
+          setUser(response.data);
         }
       } catch (error) {
-        if (!isMounted) return;
-        
-        setUser(null);
-        
-        if (!isAuthPage) {
-          router.replace('/login');
-        } else {
+        if (isMounted) {
+          setUser(null);
+        }
+      } finally {
+        if (isMounted) {
           setIsCheckingAuth(false);
         }
       }
     };
 
-    checkAuth();
+    initializeAuth();
 
     return () => {
       isMounted = false;
     };
-  }, [safePathname, router, isAuthPage, user]);
+  }, []);
+
+  // =========================================================================
+  // 改进：自适应双轨制路由守卫（解决登录后回弹的问题，同时保持秒开性能）
+  // =========================================================================
+  useEffect(() => {
+    if (isCheckingAuth) return;
+
+    // 获取本地存储的 Token 状态
+    const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
+
+    if (!token) {
+      // 轨道一：完全未登录（本地无Token），且当前不是免鉴权页面 -> 拦截至登录页
+      if (!isAuthPage) {
+        router.replace('/login');
+      }
+    } else {
+      // 轨道二：有 Token
+      if (!user) {
+        // 刚登录成功跳转，或者刷新了页面，内存 user 为空 -> 立即补全一次用户信息
+        const fetchUserAfterLogin = async () => {
+          setIsCheckingAuth(true);
+          try {
+            const response = await api.get('/me');
+            setUser(response.data);
+          } catch (e) {
+            setUser(null);
+            localStorage.removeItem("auth_token");
+            router.replace('/login');
+          } finally {
+            setIsCheckingAuth(false);
+          }
+        };
+        fetchUserAfterLogin();
+      } else {
+        // 有 Token 且内存有用户，如果还在登录页 -> 送进控制台
+        if (isAuthPage) {
+          router.replace('/dashboard');
+        }
+      }
+    }
+  }, [safePathname, user, isCheckingAuth, isAuthPage, router]);
 
   const getRoleName = (role: number) => {
     switch (role) {
@@ -95,14 +122,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     } catch (error) {
       console.error("Logout error", error);
     } finally {
-      // 退出时彻底清除本地存留的手机端 Bearer Token
       localStorage.removeItem("auth_token");
       setIsLogoutModalOpen(false);
-      
-      // 在跳转前先显示成功登出的 Toast
       setToast({ message: "Logout successful! Redirecting to login...", type: 'success' });
       
-      // 延迟 1.5 秒，让 Toast 完整显示完毕后再执行路由替换与用户态清空
       setTimeout(() => {
         setUser(null);
         router.replace('/login');
@@ -128,9 +151,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     );
   }
 
-  // ============================================================
-  // Navigation structure
-  // ============================================================
   const mainNavItems = [
     { id: '/dashboard',   label: 'Dashboard',  icon: LayoutDashboard },
     { id: '/ai-insights', label: 'AI Insights', icon: BarChart3 },
@@ -148,24 +168,20 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/payment-methods',  label: 'Payment Methods',  icon: CreditCard },
   ];
 
-  // 📱 【核心调整】：完全对齐 Flutter Mobile 的底栏 5 键设计
   const mobileNavItems = [
     { id: '/dashboard',   label: 'Dash',      icon: LayoutDashboard },
     { id: '/expenses',    label: 'Expenses',  icon: ReceiptText },
     { id: '/income',      label: 'Income',    icon: DollarSign },
     { id: '/ai-insights', label: 'AI',        icon: BarChart3 },
-    { id: 'settings_menu', label: 'Settings',  icon: Settings }, // 第5个按键改为了Settings
+    { id: 'settings_menu', label: 'Settings',  icon: Settings }, 
   ];
 
-  // 判断当前页面是否是在底栏之外的“更多/系统设置”分类路径下
   const moreMenuPaths = ['/users', '/calendar', '/budget', '/profile', '/types', '/categories', '/payment-methods'];
 
   const isActive = (id: string) =>
     safePathname === id || (safePathname.startsWith(id) && id !== '/');
 
   const isSettingsActive = settingsSubItems.some(i => isActive(i.id));
-
-  // 小米/Flutter 权限同理的权限判定，仅 0(Super Admin) 或 1(Admin) 可见用户管理
   const canSeeUsers = user?.role === 0 || user?.role === 1;
 
   return (
@@ -308,7 +324,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       </main>
 
-      {/* 📱 Mobile Bottom Navigation Bar: 对齐 Flutter MainLayout 设计 */}
+      {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-black/5 flex items-center justify-around px-2 z-50 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
         {mobileNavItems.map((item) => (
           <button
@@ -341,7 +357,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         ))}
       </div>
 
-      {/* 📱 Mobile More Menu Overlay: 完全对齐 Flutter Mobile 底栏设置抽屉 */}
+      {/* Mobile Drawer Menu */}
       {isMobileMenuOpen && (
         <div
           className="md:hidden fixed inset-0 bg-sunset-dark/40 backdrop-blur-sm z-40"
@@ -351,7 +367,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             className="absolute bottom-16 right-4 w-64 bg-white rounded-3xl p-3 shadow-2xl border border-sunset-primary/10 animate-in slide-in-from-bottom-5"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 顶栏个人信息板块 */}
             <div className="flex items-center gap-3 bg-gradient-to-br from-orange-50/50 to-red-50/50 p-3 rounded-2xl border border-orange-100 mb-2">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sunset-primary to-sunset-secondary flex items-center justify-center text-white font-bold shrink-0 shadow-sm text-lg uppercase">
                 {user?.full_name ? user.full_name.charAt(0) : 'U'}
@@ -364,7 +379,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </div>
             </div>
 
-            {/* FEATURES 独立功能区 */}
             <div className="space-y-0.5">
               <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest px-4 pt-1 pb-1">FEATURES</p>
               
@@ -409,7 +423,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
             <div className="my-1.5 mx-2 border-t border-dashed border-orange-100" />
 
-            {/* SETTINGS 系统设置区 */}
             <div className="space-y-0.5">
               <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest px-4 pb-1">SETTINGS</p>
               
@@ -431,7 +444,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
             <div className="my-1.5 mx-2 border-t border-dashed border-orange-100" />
             
-            {/* 退出登录板块 */}
             <button
               onClick={() => { setIsMobileMenuOpen(false); setIsLogoutModalOpen(true); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all"

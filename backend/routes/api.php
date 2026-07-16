@@ -64,6 +64,8 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
 
     // Expense 管理路由
+    // 这个必须放在资源路由上面，防止被解析成 expenses/{id}
+    Route::post('/expenses/scan', [ExpenseController::class, 'scanReceipt']);
     Route::get('/expenses', [ExpenseController::class, 'index']);
     Route::post('/expenses', [ExpenseController::class, 'store']);
     Route::put('/expenses/{id}', [ExpenseController::class, 'update']);
