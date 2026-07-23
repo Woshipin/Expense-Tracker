@@ -90,58 +90,57 @@ class AuthController extends Controller
     public function handleProviderCallback($provider)
     {
         try {
-            // 🌟 核心增强：针对 Facebook 显式指定获取的字段，防止 Graph API 拒回
+            // 1. 尝试获取第三方用户信息（加入 Facebook 容错处理）
+            $socialUser = null;
             if ($provider === 'facebook') {
-                $socialUser = Socialite::driver('facebook')
-                    ->fields(['name', 'email', 'picture.type(large)'])
-                    ->stateless()
-                    ->user();
+                try {
+                    $socialUser = Socialite::driver('facebook')->stateless()->user();
+                } catch (\Exception $fbEx) {
+                    // 如果 Facebook Graph API 报权限错误，降级只获取基础公开信息
+                    Log::warning("Facebook Graph API Notice: " . $fbEx->getMessage());
+                    $socialUser = Socialite::driver('facebook')
+                        ->fields(['name', 'email'])
+                        ->stateless()
+                        ->user();
+                }
             } else {
                 $socialUser = Socialite::driver($provider)->stateless()->user();
             }
 
-            // 1. 邮箱兜底保护（防止 FB 未发布模式下不返回邮箱）
-            $email = $socialUser->getEmail() ?: "facebook_{$socialUser->getId()}@social.com";
-
-            // 2. 头像截断保护
+            // 2. 提取信息并做安全防护
+            $email = $socialUser->getEmail() ?: "fb_{$socialUser->getId()}@facebook.com";
+            $name = $socialUser->getName() ?: 'Facebook User';
             $rawAvatar = $socialUser->getAvatar();
             $safeAvatar = $rawAvatar ? substr($rawAvatar, 0, 255) : null;
 
-            // 3. 查找或创建用户
-            $user = User::where('provider', $provider)
-                ->where('provider_id', $socialUser->getId())
-                ->orWhere('email', $email)
-                ->first();
-
-            if (!$user) {
-                $user = User::create([
-                    'full_name'   => $socialUser->getName() ?? 'Facebook User',
-                    'email'       => $email,
-                    'password'    => null, 
+            // 3. 🌟 原子化操作：查找或更新/创建用户，避免重复插入主键冲突
+            $user = User::updateOrCreate(
+                ['email' => $email],
+                [
+                    'full_name'   => $name,
                     'provider'    => $provider,
                     'provider_id' => $socialUser->getId(),
                     'image_path'  => $safeAvatar,
-                ]);
-            } else {
-                $user->update([
-                    'provider'    => $provider,
-                    'provider_id' => $socialUser->getId(),
-                    'image_path'  => $user->image_path ?: $safeAvatar,
-                ]);
-            }
+                ]
+            );
 
+            // 4. 检查账号状态
             if ($user->status === User::STATUS_INACTIVE) {
-                return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=account_banned');
+                $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
+                return redirect()->away("{$frontendUrl}/login?error=account_banned");
             }
 
-            // 4. 签发 JWT Token 并返回
+            // 5. 🌟 强制签发 JWT Token
             $token = auth('api')->login($user);
 
-            return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?token=' . $token);
+            // 6. 安全重定向回 Vercel 前端
+            $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
+            return redirect()->away("{$frontendUrl}/login?token={$token}");
 
         } catch (\Exception $e) {
             Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage());
-            return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=social_auth_failed');
+            $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
+            return redirect()->away("{$frontendUrl}/login?error=social_auth_failed");
         }
     }
 
