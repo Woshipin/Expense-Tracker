@@ -1,28 +1,37 @@
 FROM php:8.2-apache
 
-# 安装 MySQL 扩展
+# 1. 安装系统所需依赖与 PHP 扩展 (包含 MySQL 支持)
 RUN apt-get update && apt-get install -y \
-    libpng-dev libjpeg-dev libfreetype6-dev zip unzip git \
-    && docker-php-ext-install pdo pdo_mysql
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    zip \
+    unzip \
+    git \
+    curl \
+    && docker-php-ext-install pdo pdo_mysql gd
 
-# 开启 Apache rewrite
+# 2. 开启 Apache 的 Rewrite 模块 (Laravel 路由必需)
 RUN a2enmod rewrite
 
-# 复制项目代码
+# 3. 复制后端代码到容器工作目录
 COPY . /var/www/html
 
-# 设置入口为 public 目录
+# 4. 将 Apache 根目录重定向到 public 文件夹
 ENV APACHE_DOCUMENT_ROOT /var/www/html/public
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/conf-available/*.conf
 
-# 安装 Composer
+# 5. 安装 Composer 并拉取生产环境依赖
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 RUN composer install --no-dev --optimize-autoloader
 
-# 赋予存储目录权限
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# 6. 赋予 Laravel 存储与缓存目录读写权限
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
+# 7. 暴露 80 端口
 EXPOSE 80
 
-# 🌟 核心新增：容器启动时自动先执行 php artisan migrate --force 建表，再启动 Apache
-CMD php artisan migrate --force && apache2-foreground
+# 8. 🌟 标准 JSON 格式启动命令：先自动在 TiDB 建表，再启动 Apache 服务
+CMD ["sh", "-c", "php artisan migrate --force && apache2-foreground"]
