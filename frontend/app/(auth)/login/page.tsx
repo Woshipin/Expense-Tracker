@@ -84,28 +84,39 @@ export default function LoginPage() {
 
   // 监听并捕获后端第三方成功登录重定向附带的 token
   useEffect(() => {
-    // 🌟 清除 Facebook 自动添加的 #_=_ 尾巴
-    if (typeof window !== "undefined" && window.location.hash === "#_=_") {
+    if (typeof window === "undefined") return;
+
+    // 1. 强力清除 Facebook 的 #_=_ 毒瘤，防止干扰 Next.js 路由
+    if (window.location.hash.includes("#_=_")) {
       window.history.replaceState(null, "", window.location.pathname + window.location.search);
     }
 
-    const token = searchParams.get("token");
+    // 2. 双重保险提取 Token (优先从 searchParams 拿，拿不到就从原生 window.location 强行解析)
+    let token = searchParams.get("token");
+    if (!token) {
+       const urlParams = new URLSearchParams(window.location.search);
+       token = urlParams.get("token");
+    }
+
+    // 3. 成功拿到 Token，立刻跳转 Dashboard
     if (token) {
       localStorage.setItem("auth_token", token);
       setToast({
-        message: "Social login successful! Syncing dashboard...",
+        message: "Social login successful! Redirecting...",
         type: "success",
       });
+      // 强行清理 URL，只保留纯净的 /dashboard
       setTimeout(() => {
-        router.push("/dashboard");
-      }, 1500);
+        window.location.href = "/dashboard";
+      }, 1000);
       return;
     }
 
+    // 4. 只有在明确收到 error 参数，且绝对没有 token 的情况下，才弹报错
     const error = searchParams.get("error");
     if (error === "social_auth_failed") {
       setToast({
-        message: "Social login failed or cancelled. (第三方登录取消或失败)",
+        message: "Social login failed or cancelled. (第三方登录被取消)",
         type: "error",
       });
     } else if (error === "account_banned") {
@@ -114,7 +125,7 @@ export default function LoginPage() {
         type: "error",
       });
     }
-  }, [searchParams, router]);
+  }, [searchParams]);
 
   // 从 LocalStorage 恢复 "Remember Me" 状态
   useEffect(() => {
