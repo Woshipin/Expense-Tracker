@@ -92,16 +92,23 @@ class AuthController extends Controller
         try {
             $socialUser = Socialite::driver($provider)->stateless()->user();
 
-            // 🌟 核心修复：安全截取头像链接，防止 Facebook 超长 URL 导致数据库报错
+            // 🌟 核心防崩溃 1：如果 Facebook 处于开发模式没返回 Email，自动用 ID 生成虚拟 Email 兜底
+            $email = $socialUser->getEmail() ?: "{$provider}_{$socialUser->getId()}@facebook.com";
+
+            // 🌟 核心防崩溃 2：安全截断超长头像链接
             $rawAvatar = $socialUser->getAvatar();
             $safeAvatar = $rawAvatar ? substr($rawAvatar, 0, 255) : null;
 
-            $user = User::where('email', $socialUser->getEmail())->first();
+            // 3. 优先匹配 Provider ID 或 Email
+            $user = User::where('provider', $provider)
+                ->where('provider_id', $socialUser->getId())
+                ->orWhere('email', $email)
+                ->first();
 
             if (!$user) {
                 $user = User::create([
-                    'full_name'   => $socialUser->getName() ?? 'User',
-                    'email'       => $socialUser->getEmail(),
+                    'full_name'   => $socialUser->getName() ?? ucfirst($provider) . ' User',
+                    'email'       => $email,
                     'password'    => null, 
                     'provider'    => $provider,
                     'provider_id' => $socialUser->getId(),
@@ -119,6 +126,7 @@ class AuthController extends Controller
                 return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=account_banned');
             }
 
+            // 4. 颁发 JWT 令牌
             $token = auth('api')->login($user);
 
             return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?token=' . $token);
