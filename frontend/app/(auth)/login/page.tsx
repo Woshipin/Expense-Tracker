@@ -4,14 +4,12 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft,
   Eye,
   EyeOff,
   LogIn,
   Lock,
   Mail,
   Loader2,
-  Globe,
 } from "lucide-react";
 import { Input, Toast } from "@/components/ui";
 import api from "@/lib/axios";
@@ -204,35 +202,20 @@ export default function LoginPage() {
     }));
   };
 
-  // 🌟 已更新：适配 Render 生产环境的社群登录重定向
+  // 🌟 彻底重写：强制使用 axios 配置的当前有效 API 网址，杜绝旧环境变量干扰
   const handleSocialLoginClick = (provider: string) => {
     setIsLoading(true);
 
-    let baseURL = process.env.NEXT_PUBLIC_API_URL;
+    // 直接从 api (axios.ts) 实例获取当前激活的 baseURL，如果为空兜底用 Render 生产网址
+    let baseURL = api.defaults.baseURL as string || "https://expense-tracker-system-pe3l.onrender.com/api";
 
-    if (!baseURL) {
-      baseURL = api.defaults.baseURL as string;
-    }
-
-    if (!baseURL || baseURL.includes("127.0.0.1") || baseURL.includes("localhost")) {
-      if (typeof window !== "undefined") {
-        const currentHost = window.location.hostname;
-        const protocol = window.location.protocol;
-
-        if (currentHost === "localhost" || currentHost.includes("192.168") || currentHost.includes("10.200")) {
-          baseURL = `${protocol}//${currentHost}:8000/api`;
-        } else {
-          // 🌟 已替换为 Render 生产环境地址
-          baseURL = "https://expense-tracker-system-pe3l.onrender.com/api";
-        }
-      }
-    }
-
-    if (baseURL && !baseURL.endsWith("/api")) {
+    // 格式化确保没有多余的斜杠且以 /api 结尾
+    if (!baseURL.endsWith("/api")) {
       baseURL = `${baseURL.replace(/\/$/, "")}/api`;
     }
-    baseURL = baseURL?.replace(/\/$/, "") || "";
+    baseURL = baseURL.replace(/\/$/, "");
 
+    // 强行拼接最终的 OAuth 鉴权地址并跳转
     window.location.href = `${baseURL}/auth/${provider.toLowerCase()}`;
   };
 
