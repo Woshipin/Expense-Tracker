@@ -23,3 +23,6 @@ RUN composer install --no-dev --optimize-autoloader
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 EXPOSE 80
+
+# 🌟 核心新增：容器启动时自动先执行 php artisan migrate --force 建表，再启动 Apache
+CMD php artisan migrate --force && apache2-foreground
