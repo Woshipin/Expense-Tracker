@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
-// 引入 useSearchParams 用于捕获后端重定向回来的错误或 token 参数
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -85,11 +84,11 @@ export default function LoginPage() {
   });
   const [errors, setErrors] = useState<any>({});
 
-  // 🌟 【核心修复】：监听并捕获后端第三方成功登录后重定向附带的 token，并自动完成登录跳转
+  // 监听并捕获后端第三方成功登录重定向附带的 token
   useEffect(() => {
     const token = searchParams.get("token");
     if (token) {
-      localStorage.setItem("auth_token", token); // 保存至本地作为 API 的 Bearer 认证凭证
+      localStorage.setItem("auth_token", token);
       setToast({
         message: "Social login successful! Syncing dashboard...",
         type: "success",
@@ -100,7 +99,6 @@ export default function LoginPage() {
       return;
     }
 
-    // 捕获可能传递回来的错误
     const error = searchParams.get("error");
     if (error === "social_auth_failed") {
       setToast({
@@ -115,7 +113,7 @@ export default function LoginPage() {
     }
   }, [searchParams, router]);
 
-  // 组件挂载时，从 LocalStorage 恢复 "Remember Me" 状态、邮箱和密码
+  // 从 LocalStorage 恢复 "Remember Me" 状态
   useEffect(() => {
     const savedEmail = localStorage.getItem("rememberedEmail");
     const savedPassword = localStorage.getItem("rememberedPassword");
@@ -150,7 +148,6 @@ export default function LoginPage() {
         rememberMe: formData.rememberMe, 
       });
 
-      // 提取并保存 Token
       if (response.data && response.data.access_token) {
         localStorage.setItem("auth_token", response.data.access_token);
       }
@@ -207,7 +204,7 @@ export default function LoginPage() {
     }));
   };
 
-  // 已经过线上环境适配的社群登录重定向
+  // 🌟 已更新：适配 Render 生产环境的社群登录重定向
   const handleSocialLoginClick = (provider: string) => {
     setIsLoading(true);
 
@@ -225,7 +222,8 @@ export default function LoginPage() {
         if (currentHost === "localhost" || currentHost.includes("192.168") || currentHost.includes("10.200")) {
           baseURL = `${protocol}//${currentHost}:8000/api`;
         } else {
-          baseURL = "https://expense-tracker-production-b2b0.up.railway.app/api";
+          // 🌟 已替换为 Render 生产环境地址
+          baseURL = "https://expense-tracker-system-pe3l.onrender.com/api";
         }
       }
     }

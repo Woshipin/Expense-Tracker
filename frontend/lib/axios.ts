@@ -1,15 +1,16 @@
 import axios from "axios";
 
 // =========================================================================
-// 【手动一键切换区】
+// 【环境一键切换区】
 //  "local"      => 强制锁定本地 API (http://localhost:8000/api)
-//  "production" => 强制锁定生产环境 API (https://expense-tracker-production-b2b0.up.railway.app/api)
+//  "production" => 强制锁定 Render 生产环境 API
 //  "auto"       => 开启自适应检测（根据当前域名或手机雷达自检）
 // =========================================================================
-const CURRENT_API_MODE: "local" | "production" | "auto" = "local"; // <--- 在这里修改即可！
+type ApiMode = "local" | "production" | "auto"; // 🌟 明确定义类型，消除 TS 报错
+const CURRENT_API_MODE: ApiMode = "production"; 
 
 // -------------------------------------------------------------------------
-const PRODUCTION_API_URL = "https://expense-tracker-production-b2b0.up.railway.app/api";
+const PRODUCTION_API_URL = "https://expense-tracker-system-pe3l.onrender.com/api";
 const LOCAL_API_URL = "http://localhost:8000/api";
 
 const CANDIDATE_URLS = [
@@ -31,11 +32,11 @@ const checkIsProductionHost = (hostname: string): boolean => {
 
 const getInitialBaseURL = () => {
   if (typeof window !== "undefined") {
-    // 1. 【改进】：如果手动设置了强制模式，优先服从
-    if (CURRENT_API_MODE === "local") {
+    // 1. 优先执行模式匹配
+    if ((CURRENT_API_MODE as ApiMode) === "local") {
       return LOCAL_API_URL;
     }
-    if (CURRENT_API_MODE === "production") {
+    if ((CURRENT_API_MODE as ApiMode) === "production") {
       return PRODUCTION_API_URL;
     }
 
@@ -55,7 +56,7 @@ const getInitialBaseURL = () => {
     }
     return `http://${hostname}:8000/api`;
   }
-  return LOCAL_API_URL;
+  return PRODUCTION_API_URL;
 };
 
 let activeBaseURL = getInitialBaseURL();
@@ -63,23 +64,22 @@ let isDetected = false;
 
 const api = axios.create({
   baseURL: activeBaseURL,
-  withCredentials: true, 
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json",
-    "Accept": "application/json",
+    Accept: "application/json",
   },
 });
 
 export const findWorkingApiURL = async (): Promise<string> => {
   if (typeof window === "undefined") return activeBaseURL;
 
-  // 1. 【改进】：如果手动设置了强制模式，优先服从并跳过后续探测
-  if (CURRENT_API_MODE === "local") {
+  if ((CURRENT_API_MODE as ApiMode) === "local") {
     activeBaseURL = LOCAL_API_URL;
     api.defaults.baseURL = activeBaseURL;
     return activeBaseURL;
   }
-  if (CURRENT_API_MODE === "production") {
+  if ((CURRENT_API_MODE as ApiMode) === "production") {
     activeBaseURL = PRODUCTION_API_URL;
     api.defaults.baseURL = activeBaseURL;
     return activeBaseURL;
@@ -122,7 +122,7 @@ export const findWorkingApiURL = async (): Promise<string> => {
     return activeBaseURL;
   }
 
-  const tempInstance = axios.create({ timeout: 1500 }); 
+  const tempInstance = axios.create({ timeout: 1500 });
 
   for (const url of CANDIDATE_URLS) {
     try {
@@ -145,7 +145,7 @@ export const findWorkingApiURL = async (): Promise<string> => {
   return activeBaseURL;
 };
 
-// 请求拦截器保持不变...
+// 请求拦截器
 api.interceptors.request.use(
   (config) => {
     if (typeof window !== "undefined") {
