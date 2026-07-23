@@ -7,9 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Cookie;
+use Illuminate\Support\Facades\Log; // 引入日志以记录异常
 use Laravel\Socialite\Facades\Socialite;
-use Illuminate\Support\Facades\Password; // 用于密码重置
-use Illuminate\Auth\Events\PasswordReset; // 用于触发密码重置成功事件
+use Illuminate\Support\Facades\Password; 
+use Illuminate\Auth\Events\PasswordReset; 
 
 class AuthController extends Controller
 {
@@ -63,7 +64,7 @@ class AuthController extends Controller
     }
 
     // ==========================================
-    // Laravel Socialite 核心逻辑
+    // Laravel Socialite 核心逻辑 (适用于 Web 端)
     // ==========================================
 
     public function redirectToProvider($provider)
@@ -89,8 +90,12 @@ class AuthController extends Controller
     public function handleProviderCallback($provider)
     {
         try {
+            // 前后端分离 API 必须使用 stateless
             $socialUser = Socialite::driver($provider)->stateless()->user();
         } catch (\Exception $e) {
+            // 🌟 加入详细错误日志，方便在 Render 的 Logs 里查看具体死因
+            Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage());
+            
             return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=social_auth_failed');
         }
 
@@ -119,8 +124,7 @@ class AuthController extends Controller
 
         $token = auth('api')->login($user);
         
-        // 💡 【核心修复】：为避免浏览器由于安全策略拦截跨域 Cookie 写入，我们不采用 withCookie 传递，
-        // 而是直接通过 URL 参数将 Token 返回给前端。之前修改的前端 LoginPage 会无感捕获该 token 并写入 localStorage。
+        // 💡 通过 URL 参数将 Token 返回给前端 (前端 LoginPage.tsx 的 useEffect 会捕获它)
         return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?token=' . $token);
     }
 
@@ -138,28 +142,25 @@ class AuthController extends Controller
         ]);
 
         try {
-            // 核心功能：使用 userFromToken() 直接解析手机原生层传来的 Access Token
+            // 使用 userFromToken() 直接解析手机原生层传来的 Access Token
             $socialUser = Socialite::driver($provider)->stateless()->userFromToken($request->token);
         } catch (\Exception $e) {
-            \Log::error("App Social Login Error ({$provider}): " . $e->getMessage());
+            Log::error("App Social Login Error ({$provider}): " . $e->getMessage());
             return response()->json(['error' => 'Invalid ' . ucfirst($provider) . ' Token (凭证验证失败，请重试)'], 401);
         }
 
-        // 查找是否已存在该邮箱关联的用户
         $user = User::where('email', $socialUser->getEmail())->first();
 
         if (!$user) {
-            // 邮箱不存在，直接无感静默创建用户
             $user = User::create([
                 'full_name'   => $socialUser->getName() ?? 'User',
                 'email'       => $socialUser->getEmail(),
-                'password'    => null, // 社交登录不需要密码
+                'password'    => null, 
                 'provider'    => $provider,
                 'provider_id' => $socialUser->getId(),
                 'image_path'  => $socialUser->getAvatar(),
             ]);
         } else {
-            // 用户已存在，则绑定/更新最新头像和 Provider ID
             $user->update([
                 'provider'    => $provider,
                 'provider_id' => $socialUser->getId(),
@@ -167,12 +168,10 @@ class AuthController extends Controller
             ]);
         }
 
-        // 判断用户是否被管理员封禁
         if ($user->status === User::STATUS_INACTIVE) {
             return response()->json(['error' => 'Account is banned or inactive (账号被封禁)'], 403);
         }
 
-        // 验证通过，颁发用于整个系统的 JWT 鉴权 Token 给 Flutter
         $token = auth('api')->login($user);
         $ttl = auth('api')->factory()->getTTL();
 
