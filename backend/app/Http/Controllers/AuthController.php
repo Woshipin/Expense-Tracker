@@ -90,16 +90,24 @@ class AuthController extends Controller
     public function handleProviderCallback($provider)
     {
         try {
-            $socialUser = Socialite::driver($provider)->stateless()->user();
+            // 🌟 核心增强：针对 Facebook 显式指定获取的字段，防止 Graph API 拒回
+            if ($provider === 'facebook') {
+                $socialUser = Socialite::driver('facebook')
+                    ->fields(['name', 'email', 'picture.type(large)'])
+                    ->stateless()
+                    ->user();
+            } else {
+                $socialUser = Socialite::driver($provider)->stateless()->user();
+            }
 
-            // 🌟 核心防崩溃 1：如果 Facebook 处于开发模式没返回 Email，自动用 ID 生成虚拟 Email 兜底
-            $email = $socialUser->getEmail() ?: "{$provider}_{$socialUser->getId()}@facebook.com";
+            // 1. 邮箱兜底保护（防止 FB 未发布模式下不返回邮箱）
+            $email = $socialUser->getEmail() ?: "facebook_{$socialUser->getId()}@social.com";
 
-            // 🌟 核心防崩溃 2：安全截断超长头像链接
+            // 2. 头像截断保护
             $rawAvatar = $socialUser->getAvatar();
             $safeAvatar = $rawAvatar ? substr($rawAvatar, 0, 255) : null;
 
-            // 3. 优先匹配 Provider ID 或 Email
+            // 3. 查找或创建用户
             $user = User::where('provider', $provider)
                 ->where('provider_id', $socialUser->getId())
                 ->orWhere('email', $email)
@@ -107,7 +115,7 @@ class AuthController extends Controller
 
             if (!$user) {
                 $user = User::create([
-                    'full_name'   => $socialUser->getName() ?? ucfirst($provider) . ' User',
+                    'full_name'   => $socialUser->getName() ?? 'Facebook User',
                     'email'       => $email,
                     'password'    => null, 
                     'provider'    => $provider,
@@ -126,7 +134,7 @@ class AuthController extends Controller
                 return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=account_banned');
             }
 
-            // 4. 颁发 JWT 令牌
+            // 4. 签发 JWT Token 并返回
             $token = auth('api')->login($user);
 
             return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?token=' . $token);
