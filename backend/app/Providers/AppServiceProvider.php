@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Auth\Notifications\ResetPassword; 
+use Illuminate\Support\Facades\URL; // 🌟 1. 引入 URL Facade
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -20,6 +21,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // =====================================================================
+        // 🌟 1. 核心修复：强制 Render 线上生产环境统一使用 HTTPS 传输协议
+        // 彻底解决 Render 代理网络下 Facebook / Google OAuth 误识别为 HTTP 导致回调失败的问题！
+        // =====================================================================
+        if (env('APP_ENV') === 'production' || config('app.env') === 'production') {
+            URL::forceScheme('https');
+        }
+
         // =====================================================================
         // 🚀 【全新改进版】：自适应重设密码邮件生成器
         // 自动提取请求客户端的 Origin（原路径），自动判断生成 Next.js (3000/132/152) 还是 Flutter (53256) 的跳转地址！
