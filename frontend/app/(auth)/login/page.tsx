@@ -84,6 +84,11 @@ export default function LoginPage() {
 
   // 监听并捕获后端第三方成功登录重定向附带的 token
   useEffect(() => {
+    // 🌟 清除 Facebook 自动添加的 #_=_ 尾巴
+    if (typeof window !== "undefined" && window.location.hash === "#_=_") {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+
     const token = searchParams.get("token");
     if (token) {
       localStorage.setItem("auth_token", token);

@@ -90,42 +90,43 @@ class AuthController extends Controller
     public function handleProviderCallback($provider)
     {
         try {
-            // 前后端分离 API 必须使用 stateless
             $socialUser = Socialite::driver($provider)->stateless()->user();
-        } catch (\Exception $e) {
-            // 🌟 加入详细错误日志，方便在 Render 的 Logs 里查看具体死因
-            Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage());
-            
-            return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=social_auth_failed');
-        }
 
-        $user = User::where('email', $socialUser->getEmail())->first();
+            // 🌟 核心修复：安全截取头像链接，防止 Facebook 超长 URL 导致数据库报错
+            $rawAvatar = $socialUser->getAvatar();
+            $safeAvatar = $rawAvatar ? substr($rawAvatar, 0, 255) : null;
 
-        if (!$user) {
-            $user = User::create([
-                'full_name'   => $socialUser->getName() ?? 'User',
-                'email'       => $socialUser->getEmail(),
-                'password'    => null, 
-                'provider'    => $provider,
-                'provider_id' => $socialUser->getId(),
-                'image_path'  => $socialUser->getAvatar(),
-            ]);
-        } else {
-            if (!$user->image_path) {
+            $user = User::where('email', $socialUser->getEmail())->first();
+
+            if (!$user) {
+                $user = User::create([
+                    'full_name'   => $socialUser->getName() ?? 'User',
+                    'email'       => $socialUser->getEmail(),
+                    'password'    => null, 
+                    'provider'    => $provider,
+                    'provider_id' => $socialUser->getId(),
+                    'image_path'  => $safeAvatar,
+                ]);
+            } else {
                 $user->update([
-                    'image_path' => $socialUser->getAvatar(),
+                    'provider'    => $provider,
+                    'provider_id' => $socialUser->getId(),
+                    'image_path'  => $user->image_path ?: $safeAvatar,
                 ]);
             }
-        }
 
-        if ($user->status === User::STATUS_INACTIVE) {
-            return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=account_banned');
-        }
+            if ($user->status === User::STATUS_INACTIVE) {
+                return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=account_banned');
+            }
 
-        $token = auth('api')->login($user);
-        
-        // 💡 通过 URL 参数将 Token 返回给前端 (前端 LoginPage.tsx 的 useEffect 会捕获它)
-        return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?token=' . $token);
+            $token = auth('api')->login($user);
+
+            return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?token=' . $token);
+
+        } catch (\Exception $e) {
+            Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage());
+            return redirect(env('FRONTEND_URL', 'http://localhost:3000') . '/login?error=social_auth_failed');
+        }
     }
 
     // ==========================================
