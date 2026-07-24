@@ -68,7 +68,6 @@ export default function ProfilePage() {
   const getDisplayImageUrl = (path: string | null) => {
     if (!path) return null;
     
-    // 给生成的代理图片链接增加时间戳 cache-busting，确保上传后图片立即变动
     const timeStamp = `?t=${new Date().getTime()}`;
 
     if (path.startsWith('http') && !path.includes('localhost') && !path.includes('127.0.0.1') && !path.includes('192.168.') && !path.includes('10.200.')) {
@@ -141,12 +140,11 @@ export default function ProfilePage() {
     data.append('full_name', profileForm.full_name);
     data.append('email', profileForm.email);
     if (selectedFile) {
-      data.append('image', selectedFile);
+      // 显式标注文件名，方便 PHP 解析 multipart
+      data.append('image', selectedFile, selectedFile.name);
     }
 
     try {
-      // 【核心修复】：移除了手写的 'Content-Type': 'multipart/form-data' Header！
-      // 让 Axios 自动补全包含 boundary 的 Content-Type，确保后端 PHP 能成功读取 $_FILES['image']
       const response = await api.post('/profile', data);
 
       const updatedUser = response.data.user;
@@ -155,7 +153,6 @@ export default function ProfilePage() {
       setIsEditProfile(false);
       showToast("Profile details updated successfully!");
 
-      // 重新拉取最新 user 数据
       fetchUser();
     } catch (error: any) {
       if (error.response && error.response.status === 422) {
@@ -238,7 +235,7 @@ export default function ProfilePage() {
                   <Input 
                     value={profileForm.full_name} 
                     onChange={(e) => setProfileForm({...profileForm, full_name: e.target.value})} 
-                    className="h-11 sm:h-12 bg-white"
+                    className="h-11 sm:h-12 bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500"
                     autoComplete="off"
                   />
                   {errors.full_name && <p className="text-xs text-red-500 mt-1 pl-1">{errors.full_name[0]}</p>}
@@ -250,7 +247,7 @@ export default function ProfilePage() {
                     type="email" 
                     value={profileForm.email} 
                     onChange={(e) => setProfileForm({...profileForm, email: e.target.value})} 
-                    className="h-11 sm:h-12 bg-white"
+                    className="h-11 sm:h-12 bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500"
                     autoComplete="new-email"
                   />
                   {errors.email && <p className="text-xs text-red-500 mt-1 pl-1">{errors.email[0]}</p>}
@@ -293,7 +290,7 @@ export default function ProfilePage() {
                       placeholder="••••••••" 
                       value={passwordForm.current_password}
                       onChange={(e) => setPasswordForm({...passwordForm, current_password: e.target.value})}
-                      className="pr-10 h-11 sm:h-12 bg-white"
+                      className="pr-10 h-11 sm:h-12 bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500"
                       autoComplete="new-password"
                     />
                     <button type="button" className="absolute right-0 top-0 h-full px-4 text-gray-400 hover:text-gray-600 transition-colors" onClick={() => setShowCurrentPassword(!showCurrentPassword)}>
@@ -313,7 +310,7 @@ export default function ProfilePage() {
                       placeholder="••••••••" 
                       value={passwordForm.new_password}
                       onChange={(e) => setPasswordForm({...passwordForm, new_password: e.target.value})}
-                      className="pr-10 h-11 sm:h-12 bg-white border-emerald-200 focus:ring-emerald-500/20"
+                      className="pr-10 h-11 sm:h-12 bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500"
                       autoComplete="new-password"
                     />
                     <button type="button" className="absolute right-0 top-0 h-full px-4 text-gray-400 hover:text-emerald-600 transition-colors" onClick={() => setShowNewPassword(!showNewPassword)}>
@@ -331,7 +328,7 @@ export default function ProfilePage() {
                       placeholder="••••••••" 
                       value={passwordForm.new_password_confirmation}
                       onChange={(e) => setPasswordForm({...passwordForm, new_password_confirmation: e.target.value})}
-                      className="pr-10 h-11 sm:h-12 bg-white border-emerald-200 focus:ring-emerald-500/20"
+                      className="pr-10 h-11 sm:h-12 bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500"
                       autoComplete="new-password"
                     />
                     <button type="button" className="absolute right-0 top-0 h-full px-4 text-gray-400 hover:text-emerald-600 transition-colors" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>

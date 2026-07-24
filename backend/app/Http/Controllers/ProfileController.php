@@ -20,10 +20,14 @@ class ProfileController extends Controller
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
+        // 【核心修复】：使用 file|mimes 替代易引发云端误报的 image 校验规则，彻底解决 422 报错
         $request->validate([
             'full_name' => 'required|string|max:255',
             'email'     => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'image'     => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120', 
+            'image'     => 'nullable|file|mimes:jpeg,png,jpg,gif,webp,jfif|max:10240', 
+        ], [
+            'image.mimes' => 'The avatar must be a valid image file (JPG, PNG, GIF, WEBP).',
+            'image.file'  => 'The uploaded file is invalid.',
         ]);
 
         try {
@@ -32,7 +36,7 @@ class ProfileController extends Controller
                 'email'     => $request->email,
             ];
 
-            // 彻底兼容 $request->file('image') 多种解析方式
+            // 兼容多方式解析图片文件
             $file = $request->file('image');
             if ($file && $file->isValid()) {
                 $destinationPath = public_path('images');
@@ -56,11 +60,11 @@ class ProfileController extends Controller
                 $filename = time() . '_' . uniqid() . '.' . $ext;
                 $file->move($destinationPath, $filename);
 
-                // 生成 api/images/ 存储路径 URL
+                // 保存 API 图片代理读取路径
                 $data['image_path'] = url('api/images/' . $filename);
             }
 
-            // 更新数据库
+            // 更新用户数据库记录
             $user->update($data);
             $freshUser = $user->fresh();
 
