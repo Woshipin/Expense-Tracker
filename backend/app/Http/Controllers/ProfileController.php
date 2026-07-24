@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
@@ -33,59 +34,58 @@ class ProfileController extends Controller
                 'email'     => $request->email,
             ];
 
-            // 【核心修复】：优先处理前端传来的 Base64 图片 (100% 穿透所有云服务器和 Axios 传输限制)
+            // ==========================================
+            // 【终极修复】：使用 Laravel Storage 处理文件
+            // ==========================================
+            $newFilename = null;
+
+            // 1. 处理前端传来的 Base64 图片
             if ($request->filled('image_base64')) {
                 $base64Image = $request->image_base64;
 
                 if (preg_match('/^data:image\/(\w+);base64,/', $base64Image, $type)) {
                     $imageData = substr($base64Image, strpos($base64Image, ',') + 1);
-                    $fileType = strtolower($type[1]); // jpg, png, gif, webp
+                    $fileType = strtolower($type[1]);
 
                     if (in_array($fileType, ['jpg', 'jpeg', 'gif', 'png', 'webp'])) {
                         $imageData = base64_decode($imageData);
 
                         if ($imageData !== false) {
-                            $destinationPath = public_path('images');
-                            if (!file_exists($destinationPath)) {
-                                @mkdir($destinationPath, 0777, true);
-                            }
-
-                            // 清理旧头像
-                            if ($user->image_path) {
-                                $parsedPath = parse_url($user->image_path, PHP_URL_PATH);
-                                if ($parsedPath) {
-                                    $oldFilename = basename($parsedPath);
-                                    $oldFileLocal = public_path('images/' . $oldFilename);
-                                    if (file_exists($oldFileLocal) && is_file($oldFileLocal)) {
-                                        @unlink($oldFileLocal);
-                                    }
-                                }
-                            }
-
-                            $filename = time() . '_' . uniqid() . '.' . $fileType;
-                            file_put_contents($destinationPath . '/' . $filename, $imageData);
-
-                            // 100% 成功生成并写入 DB 的图片代理 URL
-                            $data['image_path'] = url('api/images/' . $filename);
+                            $newFilename = time() . '_' . uniqid() . '.' . $fileType;
+                            // 使用 Storage 直接强力写入 storage/app/public/images/，自动创建目录
+                            Storage::disk('public')->put('images/' . $newFilename, $imageData);
                         }
                     }
                 }
             } 
-            // 传统 File 方式兜底
+            // 2. 传统 File 方式兜底
             else if ($request->hasFile('image') || $request->file('image')) {
                 $file = $request->file('image');
                 if ($file && $file->isValid()) {
-                    $destinationPath = public_path('images');
-                    if (!file_exists($destinationPath)) {
-                        @mkdir($destinationPath, 0777, true);
-                    }
-
                     $ext = $file->guessExtension() ?: $file->getClientOriginalExtension() ?: 'jpg';
-                    $filename = time() . '_' . uniqid() . '.' . $ext;
-                    $file->move($destinationPath, $filename);
-
-                    $data['image_path'] = url('api/images/' . $filename);
+                    $newFilename = time() . '_' . uniqid() . '.' . $ext;
+                    
+                    // 读取文件内容并写入 Storage
+                    Storage::disk('public')->put('images/' . $newFilename, file_get_contents($file->getRealPath()));
                 }
+            }
+
+            // 如果成功保存了新图片，执行旧图片清理和 URL 更新
+            if ($newFilename) {
+                // 安全清理旧头像 (通过正则匹配文件名)
+                if ($user->image_path) {
+                    $parsedPath = parse_url($user->image_path, PHP_URL_PATH);
+                    if ($parsedPath) {
+                        $oldFilename = basename($parsedPath);
+                        // 如果旧文件存在于 Storage 中，删除它
+                        if (Storage::disk('public')->exists('images/' . $oldFilename)) {
+                            Storage::disk('public')->delete('images/' . $oldFilename);
+                        }
+                    }
+                }
+
+                // 保存 API 代理图片地址
+                $data['image_path'] = url('api/images/' . $newFilename);
             }
 
             // 强行更新数据库
@@ -141,16 +141,22 @@ class ProfileController extends Controller
     }
 
     /**
-     * API 代理读取并返回图片文件
+     * API 代理读取并返回图片文件 (自动从 Storage 抓取)
      */
     public function serveImage($filename)
     {
-        $path = public_path('images/' . $filename);
-
-        if (!file_exists($path)) {
-            abort(404);
+        // 尝试从 Storage 中获取文件
+        if (Storage::disk('public')->exists('images/' . $filename)) {
+            $path = Storage::disk('public')->path('images/' . $filename);
+            return response()->file($path);
         }
 
-        return response()->file($path);
+        // 兜底检查旧的 public/images 目录
+        $oldPath = public_path('images/' . $filename);
+        if (file_exists($oldPath)) {
+            return response()->file($oldPath);
+        }
+
+        abort(404);
     }
 }
