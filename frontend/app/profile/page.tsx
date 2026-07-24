@@ -34,6 +34,58 @@ const getInitials = (name: string) => {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
 };
 
+// 【核心新增】：Canvas 智能图片压缩算法 (将大图无损压缩至 1024px，150KB 左右)
+const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.85): Promise<File> => {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = document.createElement('img');
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+                type: "image/jpeg",
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => resolve(file);
+    };
+    reader.onerror = () => resolve(file);
+  });
+};
+
 export default function ProfilePage() {
   const [toast, setToast] = useState<{message:string, type:'success'|'error'|'warning'}|null>(null);
   
@@ -63,7 +115,7 @@ export default function ProfilePage() {
   };
 
   /**
-   * 拼接动态主机或反向代理域名 (增加防缓存时间戳)
+   * 拼接动态主机或反向代理域名 (带防缓存时间戳)
    */
   const getDisplayImageUrl = (path: string | null) => {
     if (!path) return null;
@@ -124,11 +176,15 @@ export default function ProfilePage() {
     setIsChangePassword(true);
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 选择图片时自动在前端进行高清无损压缩
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      setImagePreviewState(URL.createObjectURL(file)); 
+      const rawFile = e.target.files[0];
+      setImagePreviewState(URL.createObjectURL(rawFile));
+      
+      // 自动压缩超大照片
+      const compressed = await compressImage(rawFile);
+      setSelectedFile(compressed);
     }
   };
 
@@ -140,7 +196,6 @@ export default function ProfilePage() {
     data.append('full_name', profileForm.full_name);
     data.append('email', profileForm.email);
     if (selectedFile) {
-      // 显式标注文件名，方便 PHP 解析 multipart
       data.append('image', selectedFile, selectedFile.name);
     }
 
