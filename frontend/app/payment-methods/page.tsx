@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import Link from "next/link";
 import { Card, Button, Input, Toast } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, AlertCircle, ArrowRight } from "lucide-react";
 import * as Icons from "lucide-react"; 
 import api from "@/lib/axios";
 
@@ -26,6 +27,7 @@ const DynamicIcon = ({ name, className, style }: { name: string; className?: str
 
 export default function PaymentMethodsPage() {
   const [methods, setMethods] = useState<any[]>([]);
+  const [typesList, setTypesList] = useState<any[]>([]); // 动态 Types State
   const [toast, setToast] = useState<{message:string, type:'success'|'error'|'warning'}|null>(null);
   
   // Modals state
@@ -45,7 +47,7 @@ export default function PaymentMethodsPage() {
   // Form Fields State
   const [formData, setFormData] = useState({
     name: "", 
-    type_id: "1", 
+    type_id: "", 
     icon: "CreditCard", 
     color: "#3b82f6", 
     description: "", 
@@ -62,6 +64,20 @@ export default function PaymentMethodsPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // 1. 从 DB 获取 Types 列表
+  const fetchTypes = async () => {
+    try {
+      const response = await api.get('/types', { params: { status: '1' } });
+      const list = response.data.data || response.data || [];
+      setTypesList(list);
+      return list;
+    } catch (error) {
+      console.error("Failed to fetch types from DB", error);
+      return [];
+    }
+  };
+
+  // 2. 从 DB 获取当前登录用户的 Payment Methods 列表
   const fetchMethods = async () => {
     setIsLoading(true);
     try {
@@ -80,6 +96,7 @@ export default function PaymentMethodsPage() {
   };
 
   useEffect(() => {
+    fetchTypes();
     fetchMethods();
   }, [currentPage, filterStatus]);
 
@@ -93,7 +110,8 @@ export default function PaymentMethodsPage() {
 
   const openAddModal = () => {
     setErrors({});
-    setFormData({ name: "", type_id: "1", icon: "CreditCard", color: "#3b82f6", description: "", status: "1" });
+    const defaultTypeId = typesList.length > 0 ? String(typesList[0].id) : "";
+    setFormData({ name: "", type_id: defaultTypeId, icon: "CreditCard", color: "#3b82f6", description: "", status: "1" });
     setIsAddOpen(true);
   };
 
@@ -111,6 +129,11 @@ export default function PaymentMethodsPage() {
   };
 
   const handleSaveMethod = async () => {
+    if (typesList.length === 0) {
+      showToast("Please add a Type in Types setting first.", "warning");
+      return;
+    }
+
     setIsSaving(true);
     setErrors({});
     
@@ -148,11 +171,22 @@ export default function PaymentMethodsPage() {
     }
   };
 
+  // 根据 DB 查出的 Types 动态分组 Payment Methods
   const groupedMethods = useMemo(() => {
-    const income = methods.filter(m => String(m.type_id) === '2');
-    const expense = methods.filter(m => String(m.type_id) === '1');
-    return { income, expense };
-  }, [methods]);
+    if (!typesList.length) {
+      return [];
+    }
+
+    return typesList.map((t) => {
+      const items = methods.filter(
+        (m) => String(m.type_id) === String(t.id) || (m.type && String(m.type.id) === String(t.id))
+      );
+      return {
+        type: t,
+        items: items
+      };
+    });
+  }, [methods, typesList]);
 
   return (
     <>
@@ -179,7 +213,7 @@ export default function PaymentMethodsPage() {
               <div>
                 <h3 className="text-xl font-extrabold text-sunset-dark">{viewingMethod?.name}</h3>
                 <span className="inline-flex mt-1.5 py-1 px-2.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-orange-50 text-orange-600">
-                  {String(viewingMethod?.type_id) === '2' ? 'Income' : 'Expense'}
+                  {viewingMethod?.type?.name || typesList.find(t => String(t.id) === String(viewingMethod?.type_id))?.name || 'Method'}
                 </span>
               </div>
               <p className="text-sm font-semibold text-sunset-dark/60 mt-2 px-4 bg-slate-50 py-3 rounded-xl w-full border border-gray-100">
@@ -217,21 +251,51 @@ export default function PaymentMethodsPage() {
                 {errors.name && <p className="text-xs text-red-500 mt-1 pl-1">{errors.name[0]}</p>}
               </div>
 
+              {/* 【优化后的 Select Type 区域】 */}
               <div>
-                <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest pl-1 mb-1.5 block">Type</label>
-                <Select value={formData.type_id} onValueChange={(val) => setFormData({...formData, type_id: val})}>
-                  <SelectTrigger className="bg-white rounded-xl h-11 text-sm font-medium border-orange-500/40 text-sunset-dark shadow-sm">
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent className="z-[10050]">
-                    <SelectItem value="1">Expense</SelectItem>
-                    <SelectItem value="2">Income</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center justify-between pl-1 mb-1.5">
+                  <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest block">Select Type</label>
+                  {typesList.length === 0 && (
+                    <Link href="/types" className="text-xs text-orange-600 hover:underline font-bold flex items-center gap-1">
+                      + Add Type <ArrowRight size={12} />
+                    </Link>
+                  )}
+                </div>
+
+                {typesList.length === 0 ? (
+                  /* 没有 Type 数据的优化空状态提示 UI */
+                  <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between text-amber-900 text-xs font-semibold animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2.5">
+                      <AlertCircle size={18} className="text-amber-600 shrink-0" />
+                      <span>No Type available. Please add a Type first.</span>
+                    </div>
+                    <Link
+                      href="/types"
+                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shrink-0 shadow-sm flex items-center gap-1"
+                    >
+                      Go to Types
+                    </Link>
+                  </div>
+                ) : (
+                  /* 有 Type 数据时渲染下拉列表 */
+                  <Select value={formData.type_id} onValueChange={(val) => setFormData({...formData, type_id: val})}>
+                    <SelectTrigger className="bg-white rounded-xl h-11 text-sm font-medium border-orange-500/40 text-sunset-dark shadow-sm">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[10050]">
+                      {typesList.map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {errors.type_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.type_id[0]}</p>}
               </div>
 
               <div>
-                <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest pl-1 mb-2.5 block">Select icon</label>
+                <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest pl-1 mb-2.5 block">Select Icon</label>
                 <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 p-3 bg-slate-50 rounded-2xl border border-gray-100">
                   {AVAILABLE_ICONS.map((iconName) => {
                     const isSelected = formData.icon === iconName;
@@ -254,7 +318,7 @@ export default function PaymentMethodsPage() {
               </div>
 
               <div>
-                <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest pl-1 mb-2.5 block">Select color</label>
+                <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest pl-1 mb-2.5 block">Select Color</label>
                 <div className="flex flex-wrap gap-3 p-3 bg-slate-50 rounded-2xl border border-gray-100">
                   {AVAILABLE_COLORS.map((colorHex) => {
                     const isSelected = formData.color === colorHex;
@@ -303,7 +367,11 @@ export default function PaymentMethodsPage() {
 
             <div className="px-6 py-5 border-t border-sunset-primary/10 flex flex-row justify-end items-center gap-3 shrink-0 bg-gray-50/50">
               <Button variant="ghost" className="flex-1 sm:flex-none px-6 h-11 text-sm bg-white border" onClick={() => { setIsAddOpen(false); setEditingMethod(null); }}>Cancel</Button>
-              <Button onClick={handleSaveMethod} disabled={isSaving} className="flex-1 sm:flex-none px-8 h-11 text-sm flex items-center justify-center shadow-md bg-orange-500 text-white hover:bg-orange-600">
+              <Button 
+                onClick={handleSaveMethod} 
+                disabled={isSaving || typesList.length === 0} 
+                className="flex-1 sm:flex-none px-8 h-11 text-sm flex items-center justify-center shadow-md bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" />}
                 {isSaving ? "Saving..." : "Save Method"}
               </Button>
@@ -383,80 +451,73 @@ export default function PaymentMethodsPage() {
           </div>
         </div>
 
-        {/* 栅格列表 */}
+        {/* 无 Type 时的全局空状态提醒 */}
+        {!isLoading && typesList.length === 0 && (
+          <div className="p-8 bg-gradient-to-br from-amber-50 to-orange-50/50 rounded-3xl border border-amber-200/60 text-center flex flex-col items-center justify-center gap-3 my-6 shadow-sm animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shadow-inner">
+              <AlertCircle size={28} />
+            </div>
+            <div className="max-w-md">
+              <h3 className="text-lg font-black text-sunset-dark">No Payment Types Found</h3>
+              <p className="text-xs font-bold text-sunset-dark/60 mt-1">
+                You haven't configured any transaction types in database yet. Please add at least one Type first.
+              </p>
+            </div>
+            <Link
+              href="/types"
+              className="mt-2 px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-2xl text-xs shadow-md transition-all flex items-center gap-2 hover:scale-105"
+            >
+              Go to Types Management <ArrowRight size={14} />
+            </Link>
+          </div>
+        )}
+
+        {/* 栅格列表：动态分组 */}
         {isLoading ? (
           <div className="text-center py-20 bg-white rounded-[24px] border"><Loader2 className="animate-spin text-orange-500 mx-auto w-10 h-10" /></div>
         ) : (
           <div className="space-y-8">
-            
-            {/* 1. INCOME GROUP */}
-            <div className="space-y-4">
-              {/* 【修复】：移除大写类名，只保留首字母大写 */}
-              <h2 className="text-lg font-black text-emerald-600 flex items-center gap-2 border-b border-gray-100 pb-2">
-                Income <span className="text-xs bg-emerald-50 px-2 py-0.5 rounded-full font-bold text-emerald-600">({groupedMethods.income.length})</span>
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
-                {groupedMethods.income.map((m) => (
-                  <div key={m.id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:border-orange-500/30 hover:shadow-md transition-all flex items-center justify-between group gap-2">
-                    <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <div 
-                        className="w-12 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-                        style={{ backgroundColor: `${m.color || '#3b82f6'}15`, color: m.color || '#3b82f6' }}
-                      >
-                        <DynamicIcon name={m.icon || "CreditCard"} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-extrabold text-sunset-dark text-base truncate">{m.name}</h3>
-                        <p className="text-xs font-semibold text-sunset-dark/40 truncate mt-0.5">{m.description || 'No description'}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-1 bg-slate-50 p-1.5 rounded-2xl border border-gray-100 shrink-0">
-                      <button onClick={() => setViewingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Eye size={16}/></button>
-                      <button onClick={() => openEditModal(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"><Edit2 size={16}/></button>
-                      <button onClick={() => setDeletingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
-                    </div>
-                  </div>
-                ))}
-                {groupedMethods.income.length === 0 && (
-                  <div className="col-span-full text-center py-8 font-semibold text-gray-400 bg-slate-50/50 rounded-2xl border border-dashed">No incoming channels.</div>
-                )}
-              </div>
-            </div>
+            {groupedMethods.map((group) => {
+              const isIncome = group.type.name?.toLowerCase().includes("income");
+              const headerColor = isIncome ? "text-emerald-600" : "text-red-500";
+              const badgeBg = isIncome ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500";
 
-            {/* 2. OUTGOING GROUP */}
-            <div className="space-y-4">
-              {/* 【修复】：支出栏标题已完美更改为 Expense，无大写类名，实现完美的 Title Case */}
-              <h2 className="text-lg font-black text-red-500 flex items-center gap-2 border-b border-gray-100 pb-2">
-                Expense <span className="text-xs bg-red-50 px-2 py-0.5 rounded-full font-bold text-red-500">({groupedMethods.expense.length})</span>
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
-                {groupedMethods.expense.map((m) => (
-                  <div key={m.id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:border-orange-500/30 hover:shadow-md transition-all flex items-center justify-between group gap-2">
-                    <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <div 
-                        className="w-12 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-                        style={{ backgroundColor: `${m.color || '#3b82f6'}15`, color: m.color || '#3b82f6' }}
-                      >
-                        <DynamicIcon name={m.icon || "CreditCard"} />
+              return (
+                <div key={group.type.id} className="space-y-4">
+                  <h2 className={`text-lg font-black flex items-center gap-2 border-b border-gray-100 pb-2 ${headerColor}`}>
+                    {group.type.name} <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${badgeBg}`}>({group.items.length})</span>
+                  </h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
+                    {group.items.map((m: any) => (
+                      <div key={m.id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:border-orange-500/30 hover:shadow-md transition-all flex items-center justify-between group gap-2">
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          <div 
+                            className="w-12 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
+                            style={{ backgroundColor: `${m.color || '#3b82f6'}15`, color: m.color || '#3b82f6' }}
+                          >
+                            <DynamicIcon name={m.icon || "CreditCard"} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-extrabold text-sunset-dark text-base truncate">{m.name}</h3>
+                            <p className="text-xs font-semibold text-sunset-dark/40 truncate mt-0.5">{m.description || 'No description'}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 bg-slate-50 p-1.5 rounded-2xl border border-gray-100 shrink-0">
+                          <button onClick={() => setViewingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Eye size={16}/></button>
+                          <button onClick={() => openEditModal(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"><Edit2 size={16}/></button>
+                          <button onClick={() => setDeletingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-extrabold text-sunset-dark text-base truncate">{m.name}</h3>
-                        <p className="text-xs font-semibold text-sunset-dark/40 truncate mt-0.5">{m.description || 'No description'}</p>
+                    ))}
+                    {group.items.length === 0 && (
+                      <div className="col-span-full text-center py-8 font-semibold text-gray-400 bg-slate-50/50 rounded-2xl border border-dashed">
+                        No {group.type.name?.toLowerCase()} channels.
                       </div>
-                    </div>
-                    <div className="flex gap-1 bg-slate-50 p-1.5 rounded-2xl border border-gray-100 shrink-0">
-                      <button onClick={() => setViewingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Eye size={16}/></button>
-                      <button onClick={() => openEditModal(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"><Edit2 size={16}/></button>
-                      <button onClick={() => setDeletingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
-                    </div>
+                    )}
                   </div>
-                ))}
-                {groupedMethods.expense.length === 0 && (
-                  <div className="col-span-full text-center py-8 font-semibold text-gray-400 bg-slate-50/50 rounded-2xl border border-dashed">No outgoing channels.</div>
-                )}
-              </div>
-            </div>
-
+                </div>
+              );
+            })}
           </div>
         )}
 
