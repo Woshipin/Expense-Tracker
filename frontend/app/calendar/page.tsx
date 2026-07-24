@@ -49,7 +49,6 @@ export default function CalendarPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 1. 从 DB 获取当前用户 status=1 的 Types, Categories 和 Payment Methods
   const fetchOptions = async () => {
     try {
       const [catsRes, methodsRes, typesRes] = await Promise.all([
@@ -91,7 +90,6 @@ export default function CalendarPage() {
     fetchCalendarData();
   }, [currentDate]);
 
-  // 根据当前 selected activeTypeId 过滤可用的 Category 列表
   const activeCategoryOptions = useMemo(() => {
     if (!activeTypeId) return [];
     return allCategories.filter((c: any) => 
@@ -99,7 +97,6 @@ export default function CalendarPage() {
     );
   }, [allCategories, activeTypeId]);
 
-  // 根据当前 selected activeTypeId 过滤可用的 Payment Method 列表
   const activeMethodOptions = useMemo(() => {
     if (!activeTypeId) return [];
     return allMethods.filter((m: any) => 
@@ -107,7 +104,6 @@ export default function CalendarPage() {
     );
   }, [allMethods, activeTypeId]);
 
-  // 日历计算算法
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth(); 
   
@@ -139,7 +135,6 @@ export default function CalendarPage() {
     setIsRecordListOpen(true);
   };
 
-  // 切换 Type Tab 时更新 Category 和 Payment Method
   const handleTypeTabChange = (typeObj: any) => {
     const typeIdStr = String(typeObj.id);
     setActiveTypeId(typeIdStr);
@@ -161,7 +156,6 @@ export default function CalendarPage() {
   const openForm = (record: any = null) => {
     setErrors({});
     if (record) {
-      // 编辑模式
       setEditingRecord(record);
       const recordTypeId = String(record.type_id || record.category?.type_id || (typesList.length > 0 ? typesList[0].id : ""));
       setActiveTypeId(recordTypeId);
@@ -176,7 +170,6 @@ export default function CalendarPage() {
         category_id: String(record.category_id) 
       });
     } else {
-      // 新增模式
       setEditingRecord(null);
       const defaultType = typesList.length > 0 ? typesList[0] : null;
       const defaultTypeId = defaultType ? String(defaultType.id) : "";
@@ -272,7 +265,7 @@ export default function CalendarPage() {
       </header>
 
       <Card className="p-4 md:p-6 shadow-xl shadow-orange-500/5 border-2 border-orange-500/20 overflow-hidden bg-white/80 rounded-[24px]">
-        {/* 日历头部：月份控制 */}
+        {/* 日历头部 */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
              <h2 className="text-xl sm:text-2xl font-black text-sunset-dark tracking-tight">{getMonthName(month)} {year}</h2>
@@ -327,13 +320,11 @@ export default function CalendarPage() {
                   {dateNum}
                 </span>
                 
-                {/* Desktop 端标签显示 */}
                 <div className="mt-auto hidden sm:flex flex-col gap-1 justify-end">
                    {hasExpense && <div className="truncate text-[10px] sm:text-xs font-bold bg-red-50 text-red-600 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-right">Exp</div>}
                    {hasIncome && <div className="truncate text-[10px] sm:text-xs font-bold bg-emerald-50 text-emerald-600 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-right">Inc</div>}
                 </div>
                 
-                {/* Mobile 端小圆点显示 */}
                 <div className="absolute bottom-2 flex gap-1 justify-center w-full left-0 sm:hidden">
                   {hasExpense && <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-sm" />}
                   {hasIncome && <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-sm" />}
@@ -344,7 +335,7 @@ export default function CalendarPage() {
         </div>
       </Card>
 
-      {/* 1. 点击日期弹出的记录列表 */}
+      {/* 1. Transactions 列表弹窗 */}
       {isRecordListOpen && selectedDateStr && (
         <div className="fixed inset-0 z-[9000] flex items-center justify-center p-4 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
            <div className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
@@ -378,7 +369,6 @@ export default function CalendarPage() {
                             {r.type === 'income' ? '+' : '-'}RM {formatPrice(r.price)}
                           </span>
                           
-                          {/* 【修改处】：取消 opacity-0 和 group-hover 隐藏限制，让 Edit 和 Delete 图标常亮直接显示 */}
                           <div className="flex gap-1 items-center bg-slate-50 p-1 rounded-xl border border-gray-100">
                             <button onClick={() => openForm(r)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Edit"><Edit2 size={15}/></button>
                             <button onClick={() => setDeletingRecord(r)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete"><Trash2 size={15}/></button>
@@ -410,9 +400,9 @@ export default function CalendarPage() {
 
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
               
-              {/* 动态 Types 选项卡 */}
+              {/* 【优化核心 1】：可横向滚动的 Types 选项卡 (带 hide-scroll 优雅滚动) */}
               {typesList.length > 0 ? (
-                <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-6 max-w-sm mx-auto shadow-inner border border-gray-200/50">
+                <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-6 max-w-full overflow-x-auto hide-scroll sm:max-w-md mx-auto shadow-inner border border-gray-200/50 gap-1 shrink-0">
                   {typesList.map((t: any) => {
                     const isSelected = String(activeTypeId) === String(t.id);
                     const isIncome = t.name?.toLowerCase().includes('income');
@@ -424,7 +414,7 @@ export default function CalendarPage() {
                         type="button" 
                         disabled={!!editingRecord} 
                         onClick={() => handleTypeTabChange(t)} 
-                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                        className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all shrink-0 ${
                           isSelected 
                             ? `bg-white ${activeTextColor} shadow-sm border border-gray-200/50` 
                             : 'text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -489,7 +479,6 @@ export default function CalendarPage() {
                     </div>
                   </div>
 
-                  {/* Category 下拉框 */}
                   <div>
                     <div className="flex items-center justify-between pl-1 mb-1.5">
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest block">Category</label>
@@ -523,7 +512,6 @@ export default function CalendarPage() {
                     {errors.category_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.category_id[0]}</p>}
                   </div>
 
-                  {/* Payment Method 下拉框 */}
                   <div>
                     <div className="flex items-center justify-between pl-1 mb-1.5">
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest block">Payment Method</label>

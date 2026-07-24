@@ -18,12 +18,11 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
-  // 移动端菜单状态
   const [isMobileTransactionsOpen, setIsMobileTransactionsOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  const [isTransactionsOpen, setIsTransactionsOpen] = useState(false); // 桌面端 Transactions Dropdown
+  const [isTransactionsOpen, setIsTransactionsOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
   const [user, setUser] = useState<any>(null);
@@ -31,16 +30,13 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
   const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].includes(safePathname);
   
-  // Transactions 下拉包含的子路径
   const transactionSubPaths = ['/expenses', '/income', '/types', '/categories', '/payment-methods'];
   const isTransactionsActive = transactionSubPaths.some(p => safePathname === p || safePathname.startsWith(p));
 
-  // 路由如果在 Transactions 组内，自动展开 Dropdown
   useEffect(() => {
     if (isTransactionsActive) setIsTransactionsOpen(true);
   }, [isTransactionsActive]);
 
-  // 首次载入初始化鉴权
   useEffect(() => {
     let isMounted = true;
 
@@ -69,7 +65,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     };
   }, []);
 
-  // 路由守卫
   useEffect(() => {
     if (isCheckingAuth) return;
 
@@ -151,7 +146,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const isActive = (id: string) => safePathname === id || (safePathname.startsWith(id) && id !== '/');
   const canSeeUsers = user?.role === 0 || user?.role === 1;
 
-  // 1. 桌面端主导航列表 (排序: Dashboard -> AI Insights -> Users -> Calendar -> Budget)
   const desktopNavItems = [
     { id: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, show: true },
     { id: '/ai-insights', label: 'AI Insights', icon: BarChart3,       show: true },
@@ -160,7 +154,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/budget',      label: 'Budget',      icon: PieChart,        show: true },
   ];
 
-  // 2. Transactions Dropdown 子菜单
   const transactionSubItems = [
     { id: '/expenses',        label: 'Expenses',        icon: ReceiptText },
     { id: '/income',          label: 'Income',          icon: DollarSign },
@@ -169,7 +162,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/payment-methods', label: 'Payment Methods', icon: CreditCard },
   ];
 
-  // 3. 移动端底部导航栏项 (顺序: Dashboard -> AI Insights -> Calendar -> Transactions -> Settings)
   const mobileBottomNavItems = [
     { id: '/dashboard',          label: 'Dash',         icon: LayoutDashboard },
     { id: '/ai-insights',        label: 'AI',           icon: BarChart3 },
@@ -183,13 +175,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-orange-100 flex selection:bg-sunset-primary/20">
       
-      {/* =========================================================================
-          Desktop Sidebar
-      ========================================================================= */}
+      {/* Desktop Sidebar */}
       <aside 
         className={`hidden md:flex flex-col bg-gradient-to-b from-orange-100/90 via-orange-50/90 to-red-100/90 backdrop-blur-md shadow-[4px_0_24px_rgba(234,88,12,0.08)] border-0 transition-all duration-300 relative z-40 ${isSidebarOpen ? "w-64" : "w-20"}`}
       >
-        {/* Brand Header */}
         <div className="p-6 flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 rounded-[12px] bg-amber-400 text-sunset-dark flex flex-shrink-0 items-center justify-center font-bold text-2xl shadow-sm tracking-tight">+</div>
           {isSidebarOpen && (
@@ -200,17 +189,17 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           )}
         </div>
 
-        {/* User Card (带 Profile 按钮和 Hover Tooltip) */}
+        {/* 【优化 1】：去掉了 parent 上的 overflow-hidden，彻底解决 Profile 图标 hover 提示词被裁切遮挡的问题 */}
         <div className="px-4 mb-4 shrink-0">
           <div 
-            className={`rounded-2xl border border-orange-300 bg-white/40 flex items-center justify-between transition-all overflow-hidden ${isSidebarOpen ? "p-3 gap-2" : "justify-center p-2"}`}
+            className={`rounded-2xl border border-orange-300 bg-white/40 flex items-center justify-between transition-all relative ${isSidebarOpen ? "p-3 gap-2" : "justify-center p-2"}`}
           >
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#f89c8a] to-red-500 flex items-center justify-center text-white font-bold shrink-0 shadow-sm uppercase text-sm">
                 {user?.full_name ? user.full_name.charAt(0) : 'U'}
               </div>
               {isSidebarOpen && (
-                <div className="flex flex-col leading-tight min-w-0 flex-1">
+                <div className="flex flex-col leading-tight min-w-0 flex-1 overflow-hidden">
                   <span className="font-bold text-black text-sm whitespace-nowrap truncate" title={user?.full_name}>{user?.full_name || 'User'}</span>
                   <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-0.5">
                     {getRoleName(user?.role)}
@@ -219,7 +208,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               )}
             </div>
 
-            {/* Profile 图标按钮与 Hover 提示 */}
+            {/* Profile 按钮与浮动 Hover Tooltip */}
             {isSidebarOpen && (
               <button
                 onClick={() => router.push('/profile')}
@@ -227,7 +216,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 title="Profile"
               >
                 <User size={18} strokeWidth={2.5} />
-                <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 bg-sunset-dark text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap shadow-md">
+                <span className="absolute right-0 top-full mt-2 px-2.5 py-1 bg-sunset-dark text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-[100] whitespace-nowrap shadow-lg">
                   Profile
                 </span>
               </button>
@@ -235,7 +224,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           </div>
         </div>
 
-        {/* Expand / Collapse Button */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="absolute -right-3 top-8 w-6 h-6 bg-white border border-orange-300 rounded-full flex items-center justify-center text-sunset-dark hover:text-orange-500 shadow-sm z-50"
@@ -243,10 +231,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
 
-        {/* Navigation Section */}
         <nav className="px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar flex-1">
-          
-          {/* 常规单项菜单：Dashboard, AI Insights, Users, Calendar, Budget */}
           {desktopNavItems.filter(i => i.show).map((item) => (
             <button
               key={item.id}
@@ -270,7 +255,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             </button>
           ))}
 
-          {/* Transactions 下拉菜单：包含 Expenses, Income, Types, Categories, Payment Methods */}
+          {/* Transactions 下拉组 */}
           <div>
             <button
               onClick={() => {
@@ -324,18 +309,24 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             )}
           </div>
 
-        </nav>
-
-        {/* 底部 Logout */}
-        <div className="p-4 border-t border-orange-200/50 mt-auto">
+          {/* 【优化 2】：Logout 直接融入主 nav 列表中，位于 Transactions 下方，不单独成组 */}
           <button
             onClick={() => setIsLogoutModalOpen(true)}
-            className={`w-full flex items-center gap-3 rounded-2xl font-bold text-black hover:bg-white/50 hover:text-red-500 transition-all group ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"}`}
+            className={`w-full flex items-center justify-between gap-3 rounded-2xl font-bold text-red-600 hover:bg-red-50/80 transition-all duration-200 group relative outline-none mt-2 ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"}`}
           >
-            <LogOut size={20} className="shrink-0 text-black group-hover:text-red-500 transition-colors" />
-            {isSidebarOpen && <span className="whitespace-nowrap">Logout</span>}
+            <div className="flex items-center gap-3">
+              <LogOut size={20} strokeWidth={2.5} className="shrink-0 text-red-500 transition-colors" />
+              {isSidebarOpen && <span className="whitespace-nowrap">Logout</span>}
+            </div>
+
+            {!isSidebarOpen && (
+              <div className="absolute left-full ml-4 px-3 py-2 bg-sunset-dark text-white text-sm font-medium rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
+                Logout
+              </div>
+            )}
           </button>
-        </div>
+
+        </nav>
       </aside>
 
       {/* Main Content */}
@@ -347,9 +338,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       </main>
 
-      {/* =========================================================================
-          Mobile Bottom Navigation
-      ========================================================================= */}
+      {/* Mobile Bottom Navigation */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-black/5 flex items-center justify-around px-2 z-50 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
         {mobileBottomNavItems.map((item) => {
           const isTransMenu = item.id === 'transactions_menu';
@@ -424,7 +413,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       )}
 
-      {/* Mobile Settings Drawer Menu (Profile, Budget, Users, Logout) */}
+      {/* Mobile Settings Drawer Menu */}
       {isMobileMenuOpen && (
         <div
           className="md:hidden fixed inset-0 bg-sunset-dark/40 backdrop-blur-sm z-40"
@@ -434,7 +423,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             className="absolute bottom-16 right-4 left-4 sm:left-auto sm:w-72 bg-white rounded-3xl p-4 shadow-2xl border border-sunset-primary/10 animate-in slide-in-from-bottom-5"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* User Info Header */}
             <div className="flex items-center gap-3 bg-gradient-to-br from-orange-50/50 to-red-50/50 p-3 rounded-2xl border border-orange-100 mb-3">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sunset-primary to-sunset-secondary flex items-center justify-center text-white font-bold shrink-0 shadow-sm text-lg uppercase">
                 {user?.full_name ? user.full_name.charAt(0) : 'U'}
@@ -450,7 +438,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest px-2 pb-2">SETTINGS & ACCOUNT</p>
             
             <div className="space-y-1">
-              {/* Profile */}
               <button
                 onClick={() => { router.push('/profile'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/profile') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
@@ -463,7 +450,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 {isActive('/profile') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
               </button>
 
-              {/* Budget */}
               <button
                 onClick={() => { router.push('/budget'); setIsMobileMenuOpen(false); }}
                 className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/budget') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
@@ -476,7 +462,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                 {isActive('/budget') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
               </button>
 
-              {/* Users (仅管理员) */}
               {canSeeUsers && (
                 <button
                   onClick={() => { router.push('/users'); setIsMobileMenuOpen(false); }}
@@ -494,7 +479,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
             <div className="my-2 border-t border-dashed border-orange-100" />
             
-            {/* Logout */}
             <button
               onClick={() => { setIsMobileMenuOpen(false); setIsLogoutModalOpen(true); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all"
