@@ -894,7 +894,7 @@ export default function ExpensesPage() {
         </header>
 
         <Card className="p-0 overflow-hidden shadow-xl shadow-orange-500/5 border-2 border-orange-500/20 flex flex-col min-h-0 rounded-[24px]">
-          {/* Toolbar：统一了搜索框、日期选择框和下拉菜单的橙色 Border */}
+          {/* Toolbar (Expenses 专用的完全修正版) */}
           <div className="p-4 sm:p-6 border-b border-orange-500/10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white shrink-0">
             <div className="flex items-center gap-2 w-full xl:w-72 shrink-0">
               <div className="relative flex-1">
@@ -904,7 +904,7 @@ export default function ExpensesPage() {
                 />
                 <Input
                   placeholder="Search expenses..."
-                  className="pl-11 bg-white border border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl shadow-sm h-11 w-full text-xs font-bold text-sunset-dark transition-all focus:ring-2 focus:ring-orange-500/30"
+                  className="pl-11 bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl shadow-sm h-11 w-full text-xs font-bold text-sunset-dark transition-all focus:ring-2 focus:ring-orange-500/30"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   autoComplete="off"
@@ -919,6 +919,7 @@ export default function ExpensesPage() {
                 <FilterX size={18} />
               </button>
 
+              {/* 修正处：把 fetchIncomes 改为了 fetchExpenses */}
               <button
                 onClick={fetchExpenses}
                 className="xl:hidden h-11 px-3 bg-orange-50 text-orange-500 hover:bg-orange-100 hover:text-orange-600 rounded-xl transition-colors flex items-center justify-center shrink-0 border border-transparent hover:border-orange-200"
@@ -940,7 +941,7 @@ export default function ExpensesPage() {
                     placeholder="Start Date"
                     onFocus={() => setIsStartFocused(true)}
                     onBlur={() => setIsStartFocused(false)}
-                    className={`bg-white border border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? "pr-8" : ""}`}
+                    className={`bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? "pr-8" : ""}`}
                     value={filterStartDate}
                     onChange={(e) => {
                       setFilterStartDate(e.target.value);
@@ -967,7 +968,7 @@ export default function ExpensesPage() {
                     placeholder="End Date"
                     onFocus={() => setIsEndFocused(true)}
                     onBlur={() => setIsEndFocused(false)}
-                    className={`bg-white border border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? "pr-8" : ""}`}
+                    className={`bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? "pr-8" : ""}`}
                     value={filterEndDate}
                     onChange={(e) => {
                       setFilterEndDate(e.target.value);
@@ -987,7 +988,7 @@ export default function ExpensesPage() {
                   )}
                 </div>
 
-                {/* Category Filter */}
+                {/* All Categories */}
                 <Select
                   value={filterCategoryId}
                   onValueChange={(val) => {
@@ -995,7 +996,7 @@ export default function ExpensesPage() {
                     setCurrentPage(1);
                   }}
                 >
-                  <SelectTrigger className="bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                  <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
                     <SelectValue placeholder="All Categories" />
                   </SelectTrigger>
                   <SelectContent className="z-[10050]">
@@ -1008,7 +1009,7 @@ export default function ExpensesPage() {
                   </SelectContent>
                 </Select>
 
-                {/* Method Filter */}
+                {/* All Methods */}
                 <Select
                   value={filterMethodId}
                   onValueChange={(val) => {
@@ -1016,7 +1017,7 @@ export default function ExpensesPage() {
                     setCurrentPage(1);
                   }}
                 >
-                  <SelectTrigger className="bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                  <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
                     <SelectValue placeholder="All Methods" />
                   </SelectTrigger>
                   <SelectContent className="z-[10050]">
@@ -1039,6 +1040,7 @@ export default function ExpensesPage() {
                   <FilterX size={18} />
                 </button>
 
+                {/* 修正处：把 fetchIncomes 改为了 fetchExpenses */}
                 <button
                   onClick={fetchExpenses}
                   className="h-11 px-3 bg-orange-50 text-orange-500 hover:bg-orange-100 hover:text-orange-600 rounded-xl transition-colors flex items-center justify-center shrink-0 border border-transparent hover:border-orange-200"
