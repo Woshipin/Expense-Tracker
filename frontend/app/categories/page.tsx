@@ -27,6 +27,7 @@ const DynamicIcon = ({ name, className, style }: { name: string; className?: str
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<any[]>([]);
+  const [typesList, setTypesList] = useState<any[]>([]); // 【新增】：保存从 DB 拿到的 Types
   const [toast, setToast] = useState<{message:string, type:'success'|'error'|'warning'}|null>(null);
   
   // Modals state
@@ -63,6 +64,20 @@ export default function CategoriesPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // 1. 从 DB 获取所有启用的 Types
+  const fetchTypes = async () => {
+    try {
+      const response = await api.get('/types', { params: { status: '1' } });
+      const list = response.data.data || response.data || [];
+      setTypesList(list);
+      return list;
+    } catch (error) {
+      console.error("Failed to fetch types from DB", error);
+      return [];
+    }
+  };
+
+  // 2. 从 DB 获取当前登录用户的 Categories
   const fetchCategories = async () => {
     setIsLoading(true);
     try {
@@ -81,6 +96,7 @@ export default function CategoriesPage() {
   };
 
   useEffect(() => {
+    fetchTypes();
     fetchCategories();
   }, [currentPage, filterStatus]);
 
@@ -94,7 +110,9 @@ export default function CategoriesPage() {
 
   const openAddModal = () => {
     setErrors({});
-    setFormData({ name: "", type_id: "1", icon: "Tag", color: "#f97316", description: "", status: "1" });
+    // 默认选择 DB 中获取到的第一个 Type ID
+    const defaultTypeId = typesList.length > 0 ? String(typesList[0].id) : "1";
+    setFormData({ name: "", type_id: defaultTypeId, icon: "Tag", color: "#f97316", description: "", status: "1" });
     setIsAddOpen(true);
   };
 
@@ -149,11 +167,28 @@ export default function CategoriesPage() {
     }
   };
 
+  // 3. 【核心修改】：根据 DB 查出的 Types 动态分组 Categories
   const groupedCategories = useMemo(() => {
-    const income = categories.filter(c => String(c.type_id) === '2');
-    const expense = categories.filter(c => String(c.type_id) === '1');
-    return { income, expense };
-  }, [categories]);
+    if (!typesList.length) {
+      // 兜底策略：如果 Types 还在加载，按默认 ID 1和2 区分
+      const income = categories.filter(c => String(c.type_id) === '2' || c.type?.name?.toLowerCase() === 'income');
+      const expense = categories.filter(c => String(c.type_id) === '1' || c.type?.name?.toLowerCase() === 'expense');
+      return [
+        { type: { id: '2', name: 'Income' }, items: income },
+        { type: { id: '1', name: 'Expense' }, items: expense }
+      ];
+    }
+
+    return typesList.map((t) => {
+      const items = categories.filter(
+        (c) => String(c.type_id) === String(t.id) || (c.type && String(c.type.id) === String(t.id))
+      );
+      return {
+        type: t,
+        items: items
+      };
+    });
+  }, [categories, typesList]);
 
   return (
     <>
@@ -178,10 +213,9 @@ export default function CategoriesPage() {
                 <DynamicIcon name={viewingCategory?.icon || "Tag"} className="w-10 h-10" />
               </div>
               <div>
-                {/* 【修复】：只使用数据库原始数据（不再大写转换），保持原生输入格式 */}
                 <h3 className="text-xl font-extrabold text-sunset-dark">{viewingCategory?.name}</h3>
                 <span className="inline-flex mt-1.5 py-1 px-2.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-orange-50 text-orange-600">
-                  {String(viewingCategory?.type_id) === '2' ? 'Income' : 'Expense'}
+                  {viewingCategory?.type?.name || typesList.find(t => String(t.id) === String(viewingCategory?.type_id))?.name || 'Category'}
                 </span>
               </div>
               <p className="text-sm font-semibold text-sunset-dark/60 mt-2 px-4 bg-slate-50 py-3 rounded-xl w-full border border-gray-100">
@@ -208,7 +242,6 @@ export default function CategoriesPage() {
 
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-5">
               <div>
-                {/* 【修复】：硬编码写死的英文标签去掉了 uppercase，修改为完美的 Title Case（首字母大写） */}
                 <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest pl-1 mb-1.5 block">Category Name</label>
                 <Input 
                   placeholder="E.g. Food, Salary" 
@@ -222,15 +255,20 @@ export default function CategoriesPage() {
 
               <div>
                 <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest pl-1 mb-1.5 block">Select Type</label>
+                {/* 【核心修改】：动态映射数据库 types 列表 */}
                 <Select value={formData.type_id} onValueChange={(val) => setFormData({...formData, type_id: val})}>
                   <SelectTrigger className="bg-white rounded-xl h-11 text-sm font-medium border-orange-500/40 text-sunset-dark shadow-sm">
                     <SelectValue placeholder="Select Type" />
                   </SelectTrigger>
                   <SelectContent className="z-[10050]">
-                    <SelectItem value="1">Expense</SelectItem>
-                    <SelectItem value="2">Income</SelectItem>
+                    {typesList.map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                {errors.type_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.type_id[0]}</p>}
               </div>
 
               <div>
@@ -333,7 +371,6 @@ export default function CategoriesPage() {
                  </div>
                  <div>
                    <span className="block text-[10px] uppercase tracking-widest font-black opacity-50">Deleting Category</span>
-                   {/* 【不处理 data 字母的大小写，直接使用数据库原样】 */}
                    <span className="text-lg font-black block mt-0.5">{deletingCategory?.name}</span>
                  </div>
               </div>
@@ -375,7 +412,6 @@ export default function CategoriesPage() {
           
           <div className="w-full md:w-56 shrink-0">
             <Select value={filterStatus} onValueChange={(val) => { setFilterStatus(val); setCurrentPage(1); }}>
-              {/* 【修复】：移除 uppercase，使用标准的 Title Case 保持美观和一致 */}
               <SelectTrigger className="bg-white border-orange-500/30 hover:border-orange-500 rounded-2xl h-11 text-xs font-extrabold text-sunset-dark shadow-sm">
                 <SelectValue placeholder="All Status" />
               </SelectTrigger>
@@ -388,82 +424,52 @@ export default function CategoriesPage() {
           </div>
         </div>
 
-        {/* 栅格列表：纯净的首字母大写纯英文分组 */}
+        {/* 栅格列表：根据从 DB 拿到的 Types 动态分组显示 */}
         {isLoading ? (
           <div className="text-center py-20 bg-white rounded-[24px] border"><Loader2 className="animate-spin text-orange-500 mx-auto w-10 h-10" /></div>
         ) : (
           <div className="space-y-8">
-            
-            {/* 1. INCOME GROUP */}
-            <div className="space-y-4">
-              {/* 【修复】：移除了这里的 uppercase，组名恢复完美的 Income */}
-              <h2 className="text-lg font-black text-emerald-600 flex items-center gap-2 border-b border-gray-100 pb-2 tracking-wide">
-                Income <span className="text-xs bg-emerald-50 px-2 py-0.5 rounded-full font-bold text-emerald-600">({groupedCategories.income.length})</span>
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
-                {groupedCategories.income.map((c) => (
-                  <div key={c.id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:border-orange-500/30 hover:shadow-md transition-all flex items-center justify-between group gap-2">
-                    <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <div 
-                        className="w-12 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-                        style={{ backgroundColor: `${c.color || '#f97316'}15`, color: c.color || '#f97316' }}
-                      >
-                        <DynamicIcon name={c.icon || "Tag"} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        {/* 【核心修复】：直接读取并展示数据库中的 name 和 description，不做任何大小写转换 */}
-                        <h3 className="font-extrabold text-sunset-dark text-base truncate">{c.name}</h3>
-                        <p className="text-xs font-semibold text-sunset-dark/40 truncate mt-0.5">{c.description || 'No description'}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-1 bg-slate-50 p-1.5 rounded-2xl border border-gray-100 shrink-0">
-                      <button onClick={() => setViewingCategory(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Eye size={16}/></button>
-                      <button onClick={() => openEditModal(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"><Edit2 size={16}/></button>
-                      <button onClick={() => setDeletingCategory(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
-                    </div>
-                  </div>
-                ))}
-                {groupedCategories.income.length === 0 && (
-                  <div className="col-span-full text-center py-8 font-semibold text-gray-400 bg-slate-50/50 rounded-2xl border border-dashed">No income categories.</div>
-                )}
-              </div>
-            </div>
+            {groupedCategories.map((group) => {
+              const isIncome = group.type.name?.toLowerCase().includes("income");
+              const headerColor = isIncome ? "text-emerald-600" : "text-red-500";
+              const badgeBg = isIncome ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500";
 
-            {/* 2. EXPENSE GROUP */}
-            <div className="space-y-4">
-              {/* 【修复】：移除了这里的 uppercase，组名恢复完美的 Expense */}
-              <h2 className="text-lg font-black text-red-500 flex items-center gap-2 border-b border-gray-100 pb-2 tracking-wide">
-                Expense <span className="text-xs bg-red-50 px-2 py-0.5 rounded-full font-bold text-red-500">({groupedCategories.expense.length})</span>
-              </h2>
-              <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
-                {groupedCategories.expense.map((c) => (
-                  <div key={c.id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:border-orange-500/30 hover:shadow-md transition-all flex items-center justify-between group gap-2">
-                    <div className="flex items-center gap-4 min-w-0 flex-1">
-                      <div 
-                        className="w-12 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
-                        style={{ backgroundColor: `${c.color || '#f97316'}15`, color: c.color || '#f97316' }}
-                      >
-                        <DynamicIcon name={c.icon || "Tag"} />
+              return (
+                <div key={group.type.id} className="space-y-4">
+                  <h2 className={`text-lg font-black flex items-center gap-2 border-b border-gray-100 pb-2 tracking-wide ${headerColor}`}>
+                    {group.type.name} <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${badgeBg}`}>({group.items.length})</span>
+                  </h2>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4">
+                    {group.items.map((c: any) => (
+                      <div key={c.id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm hover:border-orange-500/30 hover:shadow-md transition-all flex items-center justify-between group gap-2">
+                        <div className="flex items-center gap-4 min-w-0 flex-1">
+                          <div 
+                            className="w-12 h-14 rounded-2xl flex items-center justify-center shrink-0 shadow-sm"
+                            style={{ backgroundColor: `${c.color || '#f97316'}15`, color: c.color || '#f97316' }}
+                          >
+                            <DynamicIcon name={c.icon || "Tag"} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-extrabold text-sunset-dark text-base truncate">{c.name}</h3>
+                            <p className="text-xs font-semibold text-sunset-dark/40 truncate mt-0.5">{c.description || 'No description'}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-1 bg-slate-50 p-1.5 rounded-2xl border border-gray-100 shrink-0">
+                          <button onClick={() => setViewingCategory(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Eye size={16}/></button>
+                          <button onClick={() => openEditModal(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"><Edit2 size={16}/></button>
+                          <button onClick={() => setDeletingCategory(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        {/* 【核心修复】：直接读取并展示数据库中的 name 和 description，不做任何大小写转换 */}
-                        <h3 className="font-extrabold text-sunset-dark text-base truncate">{c.name}</h3>
-                        <p className="text-xs font-semibold text-sunset-dark/40 truncate mt-0.5">{c.description || 'No description'}</p>
+                    ))}
+                    {group.items.length === 0 && (
+                      <div className="col-span-full text-center py-8 font-semibold text-gray-400 bg-slate-50/50 rounded-2xl border border-dashed">
+                        No {group.type.name?.toLowerCase()} categories.
                       </div>
-                    </div>
-                    <div className="flex gap-1 bg-slate-50 p-1.5 rounded-2xl border border-gray-100 shrink-0">
-                      <button onClick={() => setViewingCategory(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Eye size={16}/></button>
-                      <button onClick={() => openEditModal(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"><Edit2 size={16}/></button>
-                      <button onClick={() => setDeletingCategory(c)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
-                    </div>
+                    )}
                   </div>
-                ))}
-                {groupedCategories.expense.length === 0 && (
-                  <div className="col-span-full text-center py-8 font-semibold text-gray-400 bg-slate-50/50 rounded-2xl border border-dashed">No expense categories.</div>
-                )}
-              </div>
-            </div>
-
+                </div>
+              );
+            })}
           </div>
         )}
 
