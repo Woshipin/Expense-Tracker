@@ -63,12 +63,16 @@ export default function ProfilePage() {
   };
 
   /**
-   * 拼接动态主机或反向代理域名
+   * 拼接动态主机或反向代理域名 (增加防缓存时间戳)
    */
   const getDisplayImageUrl = (path: string | null) => {
     if (!path) return null;
+    
+    // 给生成的代理图片链接增加时间戳 cache-busting，确保上传后图片立即变动
+    const timeStamp = `?t=${new Date().getTime()}`;
+
     if (path.startsWith('http') && !path.includes('localhost') && !path.includes('127.0.0.1') && !path.includes('192.168.') && !path.includes('10.200.')) {
-      return path;
+      return path.includes('api/images/') ? `${path}${timeStamp}` : path;
     }
     
     try {
@@ -78,9 +82,9 @@ export default function ProfilePage() {
       const urlObj = new URL(path);
       const relativePath = urlObj.pathname; 
       
-      return `${serverHost}${relativePath}`; 
+      return `${serverHost}${relativePath}${timeStamp}`; 
     } catch (e) {
-      return path;
+      return `${path}${timeStamp}`;
     }
   };
 
@@ -139,16 +143,20 @@ export default function ProfilePage() {
     if (selectedFile) {
       data.append('image', selectedFile);
     }
-    data.append('_method', 'PUT');
 
     try {
-      const response = await api.post('/profile', data, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      setUser(response.data.user); 
-      setImagePreviewState(getDisplayImageUrl(response.data.user?.image_path));
+      // 【核心修复】：移除了手写的 'Content-Type': 'multipart/form-data' Header！
+      // 让 Axios 自动补全包含 boundary 的 Content-Type，确保后端 PHP 能成功读取 $_FILES['image']
+      const response = await api.post('/profile', data);
+
+      const updatedUser = response.data.user;
+      setUser(updatedUser); 
+      setImagePreviewState(getDisplayImageUrl(updatedUser?.image_path));
       setIsEditProfile(false);
       showToast("Profile details updated successfully!");
+
+      // 重新拉取最新 user 数据
+      fetchUser();
     } catch (error: any) {
       if (error.response && error.response.status === 422) {
         setErrors(error.response.data.errors);

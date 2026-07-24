@@ -32,45 +32,41 @@ class ProfileController extends Controller
                 'email'     => $request->email,
             ];
 
-            // 处理头像上传
-            if ($request->hasFile('image')) {
-                try {
-                    $destinationPath = public_path('images');
-                    if (!file_exists($destinationPath)) {
-                        @mkdir($destinationPath, 0777, true);
-                    }
+            // 彻底兼容 $request->file('image') 多种解析方式
+            $file = $request->file('image');
+            if ($file && $file->isValid()) {
+                $destinationPath = public_path('images');
+                if (!file_exists($destinationPath)) {
+                    @mkdir($destinationPath, 0777, true);
+                }
 
-                    // 安全清空旧的本地文件
-                    if ($user->image_path) {
-                        $parsedPath = parse_url($user->image_path, PHP_URL_PATH);
-                        if ($parsedPath) {
-                            $oldFilename = basename($parsedPath);
-                            $oldFileLocal = public_path('images/' . $oldFilename);
-                            if (file_exists($oldFileLocal) && is_file($oldFileLocal)) {
-                                @unlink($oldFileLocal);
-                            }
+                // 安全清空旧的本地文件
+                if ($user->image_path) {
+                    $parsedPath = parse_url($user->image_path, PHP_URL_PATH);
+                    if ($parsedPath) {
+                        $oldFilename = basename($parsedPath);
+                        $oldFileLocal = public_path('images/' . $oldFilename);
+                        if (file_exists($oldFileLocal) && is_file($oldFileLocal)) {
+                            @unlink($oldFileLocal);
                         }
                     }
-
-                    $file = $request->file('image');
-                    if ($file && $file->isValid()) {
-                        $ext = $file->guessExtension() ?: $file->getClientOriginalExtension() ?: 'jpg';
-                        $filename = time() . '_' . uniqid() . '.' . $ext;
-                        $file->move($destinationPath, $filename);
-
-                        // 【核心修复】：生成 api/images/{filename} 访问代理 URL，保证图片能穿透云服务器成功加载！
-                        $data['image_path'] = url('api/images/' . $filename);
-                    }
-                } catch (\Exception $imgEx) {
-                    Log::error('Profile Image Save Exception: ' . $imgEx->getMessage());
                 }
+
+                $ext = $file->guessExtension() ?: $file->getClientOriginalExtension() ?: 'jpg';
+                $filename = time() . '_' . uniqid() . '.' . $ext;
+                $file->move($destinationPath, $filename);
+
+                // 生成 api/images/ 存储路径 URL
+                $data['image_path'] = url('api/images/' . $filename);
             }
 
+            // 更新数据库
             $user->update($data);
+            $freshUser = $user->fresh();
 
             return response()->json([
                 'message' => 'Profile updated successfully',
-                'user'    => $user->fresh()
+                'user'    => $freshUser
             ]);
 
         } catch (\Exception $e) {

@@ -34,7 +34,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/refresh', [AuthController::class, 'refresh']);
 
     // 【新增】Profile 相关路由
-    Route::put('/profile', [ProfileController::class, 'updateProfile']);
+    Route::match(['post', 'put'], '/profile', [ProfileController::class, 'updateProfile']);
     Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
 
     // 【新增】Dashboard 路由
