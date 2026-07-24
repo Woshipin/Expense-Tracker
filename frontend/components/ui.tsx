@@ -28,10 +28,11 @@ export function Button({ className, variant = 'primary', ...props }: React.Butto
   );
 }
 
+// 【修复】：全局统一默认 Input 为清晰靓丽的橙色 Border
 export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input 
-      className={`w-full bg-sunset-bg/50 border border-sunset-primary/10 rounded-2xl px-4 py-3 outline-none focus:border-sunset-primary/40 focus:bg-white transition-all text-sunset-dark placeholder:text-sunset-dark/30 font-medium ${className || ""}`} 
+      className={`w-full bg-white border border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-2xl px-4 py-3 outline-none transition-all text-sunset-dark placeholder:text-sunset-dark/30 font-medium focus:ring-2 focus:ring-orange-500/30 ${className || ""}`} 
       {...props} 
     />
   );

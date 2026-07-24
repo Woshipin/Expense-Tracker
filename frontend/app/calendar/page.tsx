@@ -24,7 +24,7 @@ export default function CalendarPage() {
   const [calendarData, setCalendarData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
-  // 原始动态选项 (存储从 DB 获取的所有 active 状态数据)
+  // 原始动态选项
   const [typesList, setTypesList] = useState<any[]>([]);
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [allMethods, setAllMethods] = useState<any[]>([]);
@@ -254,18 +254,18 @@ export default function CalendarPage() {
     <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
       {toast && <div className="fixed top-4 right-4 z-[10000]"><Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} /></div>}
       
-      <header className="flex items-center justify-between">
+      {/* 【核心修复 2】：移动端强制单行展示 Add Record 按钮 (添加 whitespace-nowrap & shrink-0) */}
+      <header className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-sunset-dark">Calendar</h1>
-          <p className="text-sm font-medium text-sunset-dark/60 mt-1">Review your transactions day-by-day.</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-sunset-dark">Calendar</h1>
+          <p className="text-xs sm:text-sm font-medium text-sunset-dark/60 mt-0.5">Review your transactions day-by-day.</p>
         </div>
-        <Button onClick={() => openForm(null)} className="px-5 py-2.5 text-sm h-auto flex items-center shadow-md bg-orange-500 text-white hover:bg-orange-600">
+        <Button onClick={() => openForm(null)} className="px-3.5 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm h-auto flex items-center justify-center whitespace-nowrap shadow-md bg-orange-500 text-white hover:bg-orange-600 shrink-0">
           <Plus size={16} className="mr-1.5 shrink-0" /> Add Record
         </Button>
       </header>
 
       <Card className="p-4 md:p-6 shadow-xl shadow-orange-500/5 border-2 border-orange-500/20 overflow-hidden bg-white/80 rounded-[24px]">
-        {/* 日历头部 */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
              <h2 className="text-xl sm:text-2xl font-black text-sunset-dark tracking-tight">{getMonthName(month)} {year}</h2>
@@ -277,14 +277,12 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* 星期头部 */}
         <div className="grid grid-cols-7 gap-1 md:gap-2 mb-3">
           {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
             <div key={day} className="text-center text-[10px] sm:text-xs font-black text-sunset-dark/40 uppercase tracking-widest truncate">{day}</div>
           ))}
         </div>
         
-        {/* 日历网格 */}
         <div className="grid grid-cols-7 gap-1 md:gap-2">
           {Array.from({ length: startOffset }).map((_, i) => (
              <div key={`empty-${i}`} className="min-h-[70px] md:min-h-[100px] rounded-xl sm:rounded-2xl border border-transparent bg-gray-50/50 opacity-50"></div>
@@ -400,7 +398,7 @@ export default function CalendarPage() {
 
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
               
-              {/* 【优化核心 1】：可横向滚动的 Types 选项卡 (带 hide-scroll 优雅滚动) */}
+              {/* 可横向滚动的 Types 选项卡 */}
               {typesList.length > 0 ? (
                 <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-6 max-w-full overflow-x-auto hide-scroll sm:max-w-md mx-auto shadow-inner border border-gray-200/50 gap-1 shrink-0">
                   {typesList.map((t: any) => {
@@ -445,17 +443,17 @@ export default function CalendarPage() {
                   </h3>
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Title</label>
-                    <Input placeholder="E.g. Item Title" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" />
+                    <Input placeholder="E.g. Item Title" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500" />
                     {errors.title && <p className="text-xs text-red-500 mt-1 pl-1">{errors.title[0]}</p>}
                   </div>
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Amount (RM)</label>
-                    <Input type="number" step="0.01" placeholder="0.00" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="h-10 sm:h-11 text-sm bg-white font-black text-sunset-dark" />
+                    <Input type="number" step="0.01" placeholder="0.00" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="h-10 sm:h-11 text-sm bg-white font-black text-sunset-dark border-orange-500/80 hover:border-orange-500 focus:border-orange-500" />
                     {errors.price && <p className="text-xs text-red-500 mt-1 pl-1">{errors.price[0]}</p>}
                   </div>
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Description (Optional)</label>
-                    <textarea placeholder="Enter description..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full rounded-xl border border-orange-500/40 focus:border-orange-500 p-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 transition-all min-h-[80px] custom-scrollbar" />
+                    <textarea placeholder="Enter description..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full rounded-xl border border-orange-500/80 hover:border-orange-500 focus:border-orange-500 p-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 transition-all min-h-[80px] custom-scrollbar" />
                     {errors.description && <p className="text-xs text-red-500 mt-1 pl-1">{errors.description[0]}</p>}
                   </div>
                 </div>
@@ -469,12 +467,12 @@ export default function CalendarPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Date</label>
-                      <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-orange-500/30 focus:border-orange-500 focus:ring-orange-500/20" />
+                      <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500" />
                       {errors.date && <p className="text-xs text-red-500 mt-1 pl-1">{errors.date[0]}</p>}
                     </div>
                     <div>
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Time</label>
-                      <Input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-orange-500/30 focus:border-orange-500 focus:ring-orange-500/20" />
+                      <Input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-orange-500/80 hover:border-orange-500 focus:border-orange-500" />
                       {errors.time && <p className="text-xs text-red-500 mt-1 pl-1">{errors.time[0]}</p>}
                     </div>
                   </div>
@@ -501,7 +499,7 @@ export default function CalendarPage() {
                       </div>
                     ) : (
                       <Select value={formData.category_id} onValueChange={(val) => setFormData({...formData, category_id: val})}>
-                        <SelectTrigger className="bg-white rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm border-orange-500/50 hover:border-orange-500 focus:ring-orange-500/30">
+                        <SelectTrigger className="bg-white rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm border-orange-500/80 hover:border-orange-500 focus:ring-orange-500/30">
                           <SelectValue placeholder="Select Category" />
                         </SelectTrigger>
                         <SelectContent className="z-[10050]">
@@ -534,7 +532,7 @@ export default function CalendarPage() {
                       </div>
                     ) : (
                       <Select value={formData.payment_method_id} onValueChange={(val) => setFormData({...formData, payment_method_id: val})}>
-                        <SelectTrigger className="bg-white rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm border-orange-500/50 hover:border-orange-500 focus:ring-orange-500/30">
+                        <SelectTrigger className="bg-white rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm border-orange-500/80 hover:border-orange-500 focus:ring-orange-500/30">
                           <SelectValue placeholder="Select Method" />
                         </SelectTrigger>
                         <SelectContent className="z-[10050]">

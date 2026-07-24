@@ -63,7 +63,7 @@ export default function ProfilePage() {
   };
 
   /**
-   * 自动拼接当前可用域名，解决局域网/线上域名更换后的图片加载问题
+   * 拼接动态主机或反向代理域名
    */
   const getDisplayImageUrl = (path: string | null) => {
     if (!path) return null;
@@ -146,13 +146,13 @@ export default function ProfilePage() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setUser(response.data.user); 
+      setImagePreviewState(getDisplayImageUrl(response.data.user?.image_path));
       setIsEditProfile(false);
       showToast("Profile details updated successfully!");
     } catch (error: any) {
       if (error.response && error.response.status === 422) {
         setErrors(error.response.data.errors);
       } else {
-        // 打印后端返回的真实错误信息
         showToast(error.response?.data?.message || "Failed to update profile", "error");
       }
     } finally {

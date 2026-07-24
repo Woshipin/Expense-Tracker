@@ -32,7 +32,7 @@ class ProfileController extends Controller
                 'email'     => $request->email,
             ];
 
-            // 处理图片上传 (包含高强容错保护，防止 Render 云服务端因文件移动崩溃引发 500)
+            // 处理头像上传
             if ($request->hasFile('image')) {
                 try {
                     $destinationPath = public_path('images');
@@ -58,7 +58,8 @@ class ProfileController extends Controller
                         $filename = time() . '_' . uniqid() . '.' . $ext;
                         $file->move($destinationPath, $filename);
 
-                        $data['image_path'] = asset('images/' . $filename);
+                        // 【核心修复】：生成 api/images/{filename} 访问代理 URL，保证图片能穿透云服务器成功加载！
+                        $data['image_path'] = url('api/images/' . $filename);
                     }
                 } catch (\Exception $imgEx) {
                     Log::error('Profile Image Save Exception: ' . $imgEx->getMessage());
