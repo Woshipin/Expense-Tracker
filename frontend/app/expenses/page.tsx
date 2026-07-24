@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import { Card, Button, Input, Toast } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Receipt, Clock, RefreshCw, FilterX, Camera, UploadCloud } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Receipt, Clock, RefreshCw, FilterX, Camera, UploadCloud, AlertCircle, ArrowRight } from "lucide-react";
 import api from "@/lib/axios";
 
 const getInitials = (name: string) => { 
@@ -59,23 +60,25 @@ export default function ExpensesPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // 获取当前用户 status=1 & type_id=1 (Expense) 的下拉选项
   const fetchOptions = async () => {
     try {
       const [catsRes, methodsRes] = await Promise.all([
-        api.get('/categories?status=1'), 
-        api.get('/payment-methods?status=1')
+        api.get('/categories', { params: { status: '1' } }), 
+        api.get('/payment-methods', { params: { status: '1' } })
       ]);
       
       let cats = catsRes.data.data || catsRes.data || [];
       let methods = methodsRes.data.data || methodsRes.data || [];
 
-      cats = cats.filter((c: any) => String(c.status) === '1' && String(c.type_id) === '1');
-      methods = methods.filter((m: any) => String(m.status) === '1' && String(m.type_id) === '1');
+      // 仅保留 active (status=1) 且属于 Expense (type_id=1) 的项
+      cats = cats.filter((c: any) => String(c.status) === '1' && (String(c.type_id) === '1' || c.type?.name?.toLowerCase() === 'expense'));
+      methods = methods.filter((m: any) => String(m.status) === '1' && (String(m.type_id) === '1' || m.type?.name?.toLowerCase() === 'expense'));
 
       setCategoryOptions(cats);
       setMethodOptions(methods);
     } catch (e) {
-      console.error("Failed to load options");
+      console.error("Failed to load options", e);
     }
   };
 
@@ -155,6 +158,11 @@ export default function ExpensesPage() {
   };
 
   const handleSaveExpense = async () => {
+    if (categoryOptions.length === 0 || methodOptions.length === 0) {
+      showToast("Please ensure you have active Categories and Payment Methods first.", "warning");
+      return;
+    }
+
     setIsSaving(true);
     setErrors({});
     try {
@@ -199,7 +207,6 @@ export default function ExpensesPage() {
     }
   };
 
-  // 【修改】：提交图片给 AI 进行扫描（带上用户本地时间）
   const handleScanSubmit = async () => {
     if (!receiptFile) return;
     
@@ -207,17 +214,16 @@ export default function ExpensesPage() {
     const scanFormData = new FormData();
     scanFormData.append('receipt_image', receiptFile);
     
-    // 【关键修复】：获取用户设备当前真实的本地时间，传给后端作为兜底
     const now = new Date();
-    const localDate = now.toLocaleDateString('en-CA'); // 格式 YYYY-MM-DD
-    const localTime = now.toTimeString().split(' ')[0].substring(0, 5); // 格式 HH:MM
+    const localDate = now.toLocaleDateString('en-CA');
+    const localTime = now.toTimeString().split(' ')[0].substring(0, 5);
     scanFormData.append('client_date', localDate);
     scanFormData.append('client_time', localTime);
 
     try {
       const response = await api.post('/expenses/scan', scanFormData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 45000 // 增加超时时间
+        timeout: 45000
       });
 
       setIsScanModalOpen(false);
@@ -383,7 +389,7 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      {/* 2. Add / Edit Expense Modal (Reused for AI Review) */}
+      {/* 2. Add / Edit Expense Modal */}
       {(isAddOpen || editingExpense) && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 pb-20 md:pb-6 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-2xl xl:max-w-[950px] rounded-3xl sm:rounded-[2rem] shadow-2xl flex flex-col max-h-[calc(100vh-110px)] sm:max-h-[95vh] animate-in zoom-in-95 duration-200 overflow-hidden">
@@ -397,7 +403,6 @@ export default function ExpensesPage() {
             </div>
 
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
-              {/* 如果是 AI 扫描来的，给个小提示 */}
               {!editingExpense && formData.description === "Scanned via AI" && (
                 <div className="mb-4 p-3 bg-blue-50 text-blue-700 text-xs font-medium rounded-xl border border-blue-100 flex items-center gap-2">
                   <Camera size={16} className="text-blue-500" />
@@ -444,37 +449,71 @@ export default function ExpensesPage() {
                     </div>
                   </div>
 
+                  {/* 【优化后的 Category 下拉/空状态提醒】 */}
                   <div>
-                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Category</label>
-                    <Select value={formData.category_id} onValueChange={(val) => setFormData({...formData, category_id: val})}>
-                      <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
-                        <SelectValue placeholder="Select Category" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[10050]">
-                        {categoryOptions.length > 0 ? (
-                          categoryOptions.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)
-                        ) : (
-                          <div className="p-2 text-xs text-gray-500">Please add categories first</div>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center justify-between pl-1 mb-1.5">
+                      <label className="text-xs font-extrabold text-sunset-dark/70 block">Category</label>
+                      {categoryOptions.length === 0 && (
+                        <Link href="/categories" className="text-xs text-orange-600 hover:underline font-bold flex items-center gap-1">
+                          + Add Category <ArrowRight size={12} />
+                        </Link>
+                      )}
+                    </div>
+
+                    {categoryOptions.length === 0 ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl flex items-center justify-between text-amber-900 text-xs font-semibold">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                          <span>No Expense Category found.</span>
+                        </div>
+                        <Link href="/categories" className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0">
+                          Go to Categories
+                        </Link>
+                      </div>
+                    ) : (
+                      <Select value={formData.category_id} onValueChange={(val) => setFormData({...formData, category_id: val})}>
+                        <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
+                          <SelectValue placeholder="Select Category" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[10050]">
+                          {categoryOptions.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
                     {errors.category_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.category_id[0]}</p>}
                   </div>
 
+                  {/* 【优化后的 Payment Method 下拉/空状态提醒】 */}
                   <div>
-                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Payment Method</label>
-                    <Select value={formData.payment_method_id} onValueChange={(val) => setFormData({...formData, payment_method_id: val})}>
-                      <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
-                        <SelectValue placeholder="Select Method" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[10050]">
-                        {methodOptions.length > 0 ? (
-                          methodOptions.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)
-                        ) : (
-                          <div className="p-2 text-xs text-gray-500">Please add payment methods first</div>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center justify-between pl-1 mb-1.5">
+                      <label className="text-xs font-extrabold text-sunset-dark/70 block">Payment Method</label>
+                      {methodOptions.length === 0 && (
+                        <Link href="/payment-methods" className="text-xs text-orange-600 hover:underline font-bold flex items-center gap-1">
+                          + Add Method <ArrowRight size={12} />
+                        </Link>
+                      )}
+                    </div>
+
+                    {methodOptions.length === 0 ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl flex items-center justify-between text-amber-900 text-xs font-semibold">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                          <span>No Expense Method found.</span>
+                        </div>
+                        <Link href="/payment-methods" className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0">
+                          Go to Methods
+                        </Link>
+                      </div>
+                    ) : (
+                      <Select value={formData.payment_method_id} onValueChange={(val) => setFormData({...formData, payment_method_id: val})}>
+                        <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
+                          <SelectValue placeholder="Select Method" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[10050]">
+                          {methodOptions.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
                     {errors.payment_method_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.payment_method_id[0]}</p>}
                   </div>
                 </div>
@@ -483,7 +522,11 @@ export default function ExpensesPage() {
 
             <div className="px-5 sm:px-8 py-4 sm:py-5 border-t border-sunset-primary/10 flex flex-row justify-end items-center gap-3 shrink-0 bg-gray-50/50 rounded-b-3xl sm:rounded-b-[2rem]">
               <Button variant="ghost" className="flex-1 sm:flex-none px-6 h-10 sm:h-11 text-xs sm:text-sm" onClick={() => { setIsAddOpen(false); setEditingExpense(null); }}>Cancel</Button>
-              <Button onClick={handleSaveExpense} disabled={isSaving} className="flex-1 sm:flex-none px-6 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm flex items-center justify-center shadow-md">
+              <Button 
+                onClick={handleSaveExpense} 
+                disabled={isSaving || categoryOptions.length === 0 || methodOptions.length === 0} 
+                className="flex-1 sm:flex-none px-6 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm flex items-center justify-center shadow-md bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" />}
                 {isSaving ? "Saving..." : "Save Expense"}
               </Button>
@@ -520,7 +563,6 @@ export default function ExpensesPage() {
       {/* 主体页面内容 */}
       <div className="space-y-4 sm:space-y-6 animate-in fade-in zoom-in-95 duration-300">
         
-        {/* 【修改】：顶部 Header 与双重自适应 Button 设计 */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-sunset-dark">Expenses</h1>
@@ -528,7 +570,6 @@ export default function ExpensesPage() {
           </div>
           
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            {/* Scan Receipt 按钮 */}
             <Button 
               onClick={() => setIsScanModalOpen(true)} 
               className="flex-1 sm:flex-none px-4 py-2.5 text-sm h-auto flex items-center justify-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600"
@@ -536,7 +577,6 @@ export default function ExpensesPage() {
               <Camera size={16} className="mr-1.5 shrink-0" /> Scan Receipt
             </Button>
             
-            {/* Add Expense 按钮 */}
             <Button 
               onClick={openAddModal} 
               className="flex-1 sm:flex-none px-4 py-2.5 text-sm h-auto flex items-center justify-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600"
@@ -548,14 +588,14 @@ export default function ExpensesPage() {
 
         <Card className="p-0 overflow-hidden shadow-xl shadow-orange-500/5 border-2 border-orange-500/20 flex flex-col min-h-0 rounded-[24px]">
           
-          {/* Toolbar */}
+          {/* Toolbar：统一了搜索框、日期选择框和下拉菜单的 Border 颜色 */}
           <div className="p-4 sm:p-6 border-b border-orange-500/10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white shrink-0">
             <div className="flex items-center gap-2 w-full xl:w-72 shrink-0">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-sunset-dark/40" size={18} />
                 <Input 
                   placeholder="Search expenses..." 
-                  className="pl-11 bg-white border border-orange-500/40 hover:border-orange-500 rounded-xl shadow-sm h-11 w-full focus:ring-2 focus:ring-orange-500/30 font-medium transition-all"
+                  className="pl-11 bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl shadow-sm h-11 w-full focus:ring-2 focus:ring-orange-500/30 text-xs font-bold text-sunset-dark transition-all"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)} 
                   autoComplete="off" 
@@ -583,13 +623,14 @@ export default function ExpensesPage() {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full xl:w-auto xl:flex-1">
                 
+                {/* Start Date：边框颜色与 Category 过滤器统一 */}
                 <div className="relative flex items-center w-full">
                   <Input 
                     type={filterStartDate || isStartFocused ? "date" : "text"}
                     placeholder="Start Date"
                     onFocus={() => setIsStartFocused(true)}
                     onBlur={() => setIsStartFocused(false)}
-                    className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? 'pr-8' : ''}`}
+                    className={`bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? 'pr-8' : ''}`}
                     value={filterStartDate}
                     onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
                   />
@@ -603,13 +644,14 @@ export default function ExpensesPage() {
                   )}
                 </div>
 
+                {/* End Date：边框颜色与 Category 过滤器统一 */}
                 <div className="relative flex items-center w-full">
                   <Input 
                     type={filterEndDate || isEndFocused ? "date" : "text"}
                     placeholder="End Date"
                     onFocus={() => setIsEndFocused(true)}
                     onBlur={() => setIsEndFocused(false)}
-                    className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? 'pr-8' : ''}`}
+                    className={`bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? 'pr-8' : ''}`}
                     value={filterEndDate}
                     onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
                   />
@@ -624,20 +666,20 @@ export default function ExpensesPage() {
                 </div>
 
                 <Select value={filterCategoryId} onValueChange={(val) => { setFilterCategoryId(val); setCurrentPage(1); }}>
-                  <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                  <SelectTrigger className="bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
                     <SelectValue placeholder="All Categories" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10050]">
                     <SelectItem value="all">All Categories</SelectItem>
                     {categoryOptions.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
 
                 <Select value={filterMethodId} onValueChange={(val) => { setFilterMethodId(val); setCurrentPage(1); }}>
-                  <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                  <SelectTrigger className="bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
                     <SelectValue placeholder="All Methods" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10050]">
                     <SelectItem value="all">All Methods</SelectItem>
                     {methodOptions.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
                   </SelectContent>
