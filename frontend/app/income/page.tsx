@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { Card, Button, Input, Toast } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Wallet, Clock, RefreshCw, FilterX } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Wallet, Clock, RefreshCw, FilterX, AlertCircle, ArrowRight } from "lucide-react";
 import api from "@/lib/axios";
 
 // 获取首字母缩写
@@ -11,11 +12,10 @@ const getInitials = (name: string) => {
   return !name ? "IN" : name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2); 
 };
 
-// 找到文件顶部的 formatPrice 函数并替换
+// 格式化金额为两位小数
 const formatPrice = (price: any) => {
   const num = parseFloat(price);
   if (isNaN(num)) return "0.00";
-  // 修改处：取消整数不带小数的逻辑，统一格式化为两位小数（例如 10 变为 10.00）
   return num.toFixed(2);
 };
 
@@ -39,7 +39,6 @@ export default function IncomePage() {
   const [filterCategoryId, setFilterCategoryId] = useState("all");
   const [filterMethodId, setFilterMethodId] = useState("all");
 
-  // 【新增】：用于解决手机端 Date 占位符空白的焦点状态
   const [isStartFocused, setIsStartFocused] = useState(false);
   const [isEndFocused, setIsEndFocused] = useState(false);
 
@@ -62,23 +61,25 @@ export default function IncomePage() {
     setTimeout(() => setToast(null), 3000);
   };
 
+  // 1. 获取当前用户 status=1 & type_id=2 (Income 收入) 的下拉选项
   const fetchOptions = async () => {
     try {
       const [catsRes, methodsRes] = await Promise.all([
-        api.get('/categories?status=1'), 
-        api.get('/payment-methods?status=1')
+        api.get('/categories', { params: { status: '1' } }), 
+        api.get('/payment-methods', { params: { status: '1' } })
       ]);
       
       let cats = catsRes.data.data || catsRes.data || [];
       let methods = methodsRes.data.data || methodsRes.data || [];
 
-      cats = cats.filter((c: any) => String(c.status) === '1' && String(c.type_id) === '2');
-      methods = methods.filter((m: any) => String(m.status) === '1' && String(m.type_id) === '2');
+      // 仅保留 active (status=1) 且属于 Income (type_id=2) 的项
+      cats = cats.filter((c: any) => String(c.status) === '1' && (String(c.type_id) === '2' || c.type?.name?.toLowerCase() === 'income'));
+      methods = methods.filter((m: any) => String(m.status) === '1' && (String(m.type_id) === '2' || m.type?.name?.toLowerCase() === 'income'));
 
       setCategoryOptions(cats);
       setMethodOptions(methods);
     } catch (e) {
-      console.error("Failed to load options");
+      console.error("Failed to load options", e);
     }
   };
 
@@ -143,7 +144,6 @@ export default function IncomePage() {
     setIsAddOpen(true);
   };
 
-  // 找到并修改 openEditModal 函数
   const openEditModal = (e: any) => {
     setErrors({});
     setFormData({ 
@@ -151,7 +151,6 @@ export default function IncomePage() {
       description: e.description || "", 
       price: String(e.price), 
       date: e.date, 
-      // 修改处：增加非空安全保护，防止 e.time 为空时 substring 报错
       time: e.time ? e.time.substring(0, 5) : "00:00", 
       payment_method_id: String(e.payment_method_id), 
       category_id: String(e.category_id) 
@@ -160,6 +159,11 @@ export default function IncomePage() {
   };
 
   const handleSaveIncome = async () => {
+    if (categoryOptions.length === 0 || methodOptions.length === 0) {
+      showToast("Please ensure you have active Income Categories and Payment Methods first.", "warning");
+      return;
+    }
+
     setIsSaving(true);
     setErrors({});
     try {
@@ -215,11 +219,6 @@ export default function IncomePage() {
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 sm:gap-6 items-stretch">
                 <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-6 border border-orange-100 flex flex-col items-center justify-center gap-4 text-center h-full relative overflow-hidden">
                   <div className="absolute top-0 w-full h-24 bg-gradient-to-b from-orange-100/50 to-transparent"></div>
-                  <div className="relative z-10 shrink-0">
-                    {/* <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-[2rem] bg-gradient-to-br from-orange-500 to-red-500 text-white flex items-center justify-center font-bold text-3xl border-[3px] border-white shadow-lg">
-                      RM
-                    </div> */}
-                  </div>
                   <div className="relative z-10 mt-2">
                     <h3 className="font-extrabold text-sunset-dark text-xl sm:text-2xl leading-tight">{viewingIncome?.title}</h3>
                     <p className="font-medium text-sunset-dark/60 text-sm mt-2 px-4">{viewingIncome?.description || 'No description provided.'}</p>
@@ -316,37 +315,71 @@ export default function IncomePage() {
                     </div>
                   </div>
 
+                  {/* 【优化后的 Income Category 下拉 / 空状态提醒】 */}
                   <div>
-                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Category</label>
-                    <Select value={formData.category_id} onValueChange={(val) => setFormData({...formData, category_id: val})}>
-                      <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
-                        <SelectValue placeholder="Select Category" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[10050]">
-                        {categoryOptions.length > 0 ? (
-                          categoryOptions.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)
-                        ) : (
-                          <div className="p-2 text-xs text-gray-500">Please add categories first</div>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center justify-between pl-1 mb-1.5">
+                      <label className="text-xs font-extrabold text-sunset-dark/70 block">Category</label>
+                      {categoryOptions.length === 0 && (
+                        <Link href="/categories" className="text-xs text-orange-600 hover:underline font-bold flex items-center gap-1">
+                          + Add Category <ArrowRight size={12} />
+                        </Link>
+                      )}
+                    </div>
+
+                    {categoryOptions.length === 0 ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl flex items-center justify-between text-amber-900 text-xs font-semibold">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                          <span>No Income Category found.</span>
+                        </div>
+                        <Link href="/categories" className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0">
+                          Go to Categories
+                        </Link>
+                      </div>
+                    ) : (
+                      <Select value={formData.category_id} onValueChange={(val) => setFormData({...formData, category_id: val})}>
+                        <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
+                          <SelectValue placeholder="Select Category" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[10050]">
+                          {categoryOptions.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
                     {errors.category_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.category_id[0]}</p>}
                   </div>
 
+                  {/* 【优化后的 Income Payment Method 下拉 / 空状态提醒】 */}
                   <div>
-                    <label className="text-xs font-extrabold text-sunset-dark/70 pl-1 mb-1.5 block">Payment Method</label>
-                    <Select value={formData.payment_method_id} onValueChange={(val) => setFormData({...formData, payment_method_id: val})}>
-                      <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
-                        <SelectValue placeholder="Select Method" />
-                      </SelectTrigger>
-                      <SelectContent className="z-[10050]">
-                        {methodOptions.length > 0 ? (
-                          methodOptions.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)
-                        ) : (
-                          <div className="p-2 text-xs text-gray-500">Please add payment methods first</div>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center justify-between pl-1 mb-1.5">
+                      <label className="text-xs font-extrabold text-sunset-dark/70 block">Payment Method</label>
+                      {methodOptions.length === 0 && (
+                        <Link href="/payment-methods" className="text-xs text-orange-600 hover:underline font-bold flex items-center gap-1">
+                          + Add Method <ArrowRight size={12} />
+                        </Link>
+                      )}
+                    </div>
+
+                    {methodOptions.length === 0 ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl flex items-center justify-between text-amber-900 text-xs font-semibold">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                          <span>No Income Method found.</span>
+                        </div>
+                        <Link href="/payment-methods" className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0">
+                          Go to Methods
+                        </Link>
+                      </div>
+                    ) : (
+                      <Select value={formData.payment_method_id} onValueChange={(val) => setFormData({...formData, payment_method_id: val})}>
+                        <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-10 sm:h-11 text-sm font-medium text-sunset-dark shadow-sm">
+                          <SelectValue placeholder="Select Method" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[10050]">
+                          {methodOptions.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    )}
                     {errors.payment_method_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.payment_method_id[0]}</p>}
                   </div>
                 </div>
@@ -355,7 +388,11 @@ export default function IncomePage() {
 
             <div className="px-5 sm:px-8 py-4 sm:py-5 border-t border-sunset-primary/10 flex flex-row justify-end items-center gap-3 shrink-0 bg-gray-50/50 rounded-b-3xl sm:rounded-b-[2rem]">
               <Button variant="ghost" className="flex-1 sm:flex-none px-6 h-10 sm:h-11 text-xs sm:text-sm" onClick={() => { setIsAddOpen(false); setEditingIncome(null); }}>Cancel</Button>
-              <Button onClick={handleSaveIncome} disabled={isSaving} className="flex-1 sm:flex-none px-6 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm flex items-center justify-center shadow-md">
+              <Button 
+                onClick={handleSaveIncome} 
+                disabled={isSaving || categoryOptions.length === 0 || methodOptions.length === 0} 
+                className="flex-1 sm:flex-none px-6 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm flex items-center justify-center shadow-md bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" />}
                 {isSaving ? "Saving..." : "Save Income"}
               </Button>
@@ -397,7 +434,7 @@ export default function IncomePage() {
             <p className="text-sm font-medium text-sunset-dark/60 mt-1">Detailed view of your incoming transactions.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all">
+            <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600">
               <Plus size={16} className="mr-1.5 shrink-0" /> Add Income
             </Button>
           </div>
@@ -405,14 +442,14 @@ export default function IncomePage() {
 
         <Card className="p-0 overflow-hidden shadow-xl shadow-orange-500/5 border-2 border-orange-500/20 flex flex-col min-h-0 rounded-[24px]">
           
-          {/* Toolbar */}
+          {/* Toolbar：统一搜索框、日期选择框和下拉菜单的橙色 Border */}
           <div className="p-4 sm:p-6 border-b border-orange-500/10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white shrink-0">
             <div className="flex items-center gap-2 w-full xl:w-72 shrink-0">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-sunset-dark/40" size={18} />
                 <Input 
                   placeholder="Search incomes..." 
-                  className="pl-11 bg-white border border-orange-500/40 hover:border-orange-500 rounded-xl shadow-sm h-11 w-full focus:ring-2 focus:ring-orange-500/30 font-medium transition-all"
+                  className="pl-11 bg-white border border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl shadow-sm h-11 w-full text-xs font-bold text-sunset-dark transition-all focus:ring-2 focus:ring-orange-500/30"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)} 
                   autoComplete="off" 
@@ -439,14 +476,14 @@ export default function IncomePage() {
               
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 w-full xl:w-auto xl:flex-1">
                 
-                {/* 【移动端完美修复】：增加动态类型，当未输入日期且没有焦点时，显示“Start Date”占位提示词 */}
+                {/* Start Date */}
                 <div className="relative flex items-center w-full">
                   <Input 
                     type={filterStartDate || isStartFocused ? "date" : "text"}
                     placeholder="Start Date"
                     onFocus={() => setIsStartFocused(true)}
                     onBlur={() => setIsStartFocused(false)}
-                    className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? 'pr-8' : ''}`}
+                    className={`bg-white border border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterStartDate ? 'pr-8' : ''}`}
                     value={filterStartDate}
                     onChange={(e) => { setFilterStartDate(e.target.value); setCurrentPage(1); }}
                   />
@@ -460,14 +497,14 @@ export default function IncomePage() {
                   )}
                 </div>
 
-                {/* 【移动端完美修复】：增加动态类型，当未输入日期且没有焦点时，显示“End Date”占位提示词 */}
+                {/* End Date */}
                 <div className="relative flex items-center w-full">
                   <Input 
                     type={filterEndDate || isEndFocused ? "date" : "text"}
                     placeholder="End Date"
                     onFocus={() => setIsEndFocused(true)}
                     onBlur={() => setIsEndFocused(false)}
-                    className={`bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? 'pr-8' : ''}`}
+                    className={`bg-white border border-orange-500/80 hover:border-orange-500 focus:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30 w-full ${filterEndDate ? 'pr-8' : ''}`}
                     value={filterEndDate}
                     onChange={(e) => { setFilterEndDate(e.target.value); setCurrentPage(1); }}
                   />
@@ -482,20 +519,20 @@ export default function IncomePage() {
                 </div>
 
                 <Select value={filterCategoryId} onValueChange={(val) => { setFilterCategoryId(val); setCurrentPage(1); }}>
-                  <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                  <SelectTrigger className="bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
                     <SelectValue placeholder="All Categories" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10050]">
                     <SelectItem value="all">All Categories</SelectItem>
                     {categoryOptions.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
 
                 <Select value={filterMethodId} onValueChange={(val) => { setFilterMethodId(val); setCurrentPage(1); }}>
-                  <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
+                  <SelectTrigger className="bg-white border border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
                     <SelectValue placeholder="All Methods" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="z-[10050]">
                     <SelectItem value="all">All Methods</SelectItem>
                     {methodOptions.map(m => <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>)}
                   </SelectContent>
