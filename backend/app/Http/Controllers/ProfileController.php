@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class ProfileController extends Controller
@@ -13,44 +14,68 @@ class ProfileController extends Controller
      */
     public function updateProfile(Request $request)
     {
-        $user = auth('api')->user();
+        $user = auth('api')->user() ?? auth()->user();
+
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
 
         $request->validate([
             'full_name' => 'required|string|max:255',
             // 验证邮箱格式，且确保邮箱唯一（排除当前用户自己的邮箱）
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'email'     => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
             // 验证图片文件
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', 
+            'image'     => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', 
         ]);
 
-        $data = [
-            'full_name' => $request->full_name,
-            'email'     => $request->email,
-        ];
+        try {
+            $data = [
+                'full_name' => $request->full_name,
+                'email'     => $request->email,
+            ];
 
-        // 处理图片上传
-        if ($request->hasFile('image')) {
-            // 如果存在旧头像，自动从服务器删除，避免垃圾文件堆积
-            if ($user->image_path) {
-                $oldLocalPath = str_replace(asset(''), public_path(''), $user->image_path);
-                if (file_exists($oldLocalPath)) {
-                    @unlink($oldLocalPath);
+            // 处理图片上传
+            if ($request->hasFile('image')) {
+                // 【核心修复 1】：自动确保 public/images 文件夹存在，防止 Render 服务器因找不到目录报 500 错误
+                $destinationPath = public_path('images');
+                if (!file_exists($destinationPath)) {
+                    @mkdir($destinationPath, 0777, true);
                 }
+
+                // 【核心修复 2】：安全解析并删除旧的本地头像
+                if ($user->image_path) {
+                    $parsedPath = parse_url($user->image_path, PHP_URL_PATH);
+                    if ($parsedPath) {
+                        $oldFilename = basename($parsedPath);
+                        $oldFileLocal = public_path('images/' . $oldFilename);
+                        if (file_exists($oldFileLocal) && is_file($oldFileLocal)) {
+                            @unlink($oldFileLocal);
+                        }
+                    }
+                }
+
+                // 保存新文件
+                $file = $request->file('image');
+                $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $file->move($destinationPath, $filename);
+
+                // 拼接可直接访问的 URL
+                $data['image_path'] = asset('images/' . $filename);
             }
 
-            $file = $request->file('image');
-            $filename = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
-            $file->move(public_path('images'), $filename);
-            // 拼接可直接访问的 URL
-            $data['image_path'] = asset('images/' . $filename);
+            $user->update($data);
+
+            return response()->json([
+                'message' => 'Profile updated successfully',
+                'user'    => $user
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Profile Update Error: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to update profile: ' . $e->getMessage()
+            ], 500);
         }
-
-        $user->update($data);
-
-        return response()->json([
-            'message' => 'Profile updated successfully',
-            'user'    => $user
-        ]);
     }
 
     /**
@@ -58,9 +83,13 @@ class ProfileController extends Controller
      */
     public function updatePassword(Request $request)
     {
-        $user = auth('api')->user();
+        $user = auth('api')->user() ?? auth()->user();
 
-        // 【安全检查】如果用户是第三方登录（没密码），禁止在这里修改密码
+        if (!$user) {
+            return response()->json(['message' => 'Unauthenticated.'], 401);
+        }
+
+        // 如果用户是第三方登录（没密码），禁止修改密码
         if ($user->provider) {
             return response()->json([
                 'error' => 'Social login users cannot change password here.'
@@ -69,7 +98,7 @@ class ProfileController extends Controller
 
         $request->validate([
             'current_password' => 'required|string',
-            'new_password'     => 'required|string|min:6|confirmed', // 必须有 new_password_confirmation
+            'new_password'     => 'required|string|min:6|confirmed',
         ]);
 
         // 验证当前密码是否正确
@@ -88,7 +117,7 @@ class ProfileController extends Controller
     }
 
     /**
-     * API 代理读取并返回图片文件 (自动附加 CORS 头) Flutter Web 调试时，直接访问图片 URL 会被浏览器拦截，提示跨域问题。
+     * API 代理读取并返回图片文件 (自动附加 CORS 头)
      */
     public function serveImage($filename)
     {

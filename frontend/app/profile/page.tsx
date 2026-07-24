@@ -1,13 +1,11 @@
 "use client";
 
 import { Card, Button, Input, Toast } from "@/components/ui";
-import { User, Mail, Lock, Loader2, Eye, EyeOff, Image, X, ShieldCheck } from "lucide-react";
+import { User, Lock, Loader2, Eye, EyeOff, Image, X, ShieldCheck } from "lucide-react";
 import React, { useState, useEffect } from "react";
 import api from "@/lib/axios";
 
-// ------------------------------------
 // UI 组件：全局统一的颜色标签
-// ------------------------------------
 const RoleBadge = ({ role }: { role: any }) => {
   switch (String(role)) {
     case '0': return <span className="inline-flex py-1.5 px-3 rounded-lg text-[10px] sm:text-xs font-bold bg-purple-50 text-purple-600">SuperAdmin</span>;
@@ -65,25 +63,22 @@ export default function ProfilePage() {
   };
 
   /**
-   * 【新增核心转换函数】：
-   * 自动将数据库里保存的旧局域网图片域名，转换为当前正在活跃连接的后端域名，彻底解决切换 Wi-Fi 后头像挂掉的报错！
+   * 自动拼接当前可用域名，解决局域网/线上域名更换后的图片加载问题
    */
   const getDisplayImageUrl = (path: string | null) => {
     if (!path) return null;
-    // 如果是 Google / Facebook 等外部三方图片，直接使用
     if (path.startsWith('http') && !path.includes('localhost') && !path.includes('127.0.0.1') && !path.includes('192.168.') && !path.includes('10.200.')) {
       return path;
     }
     
     try {
-      // 获取当前正在通信的 Axios 实例基础路由（如 http://192.168.0.152:8000/api）
       const apiBase = api.defaults.baseURL || "http://127.0.0.1:8000/api";
-      const serverHost = apiBase.replace('/api', ''); // 替换掉 /api 后缀，获取后端主机域名
+      const serverHost = apiBase.replace('/api', ''); 
       
       const urlObj = new URL(path);
-      const relativePath = urlObj.pathname; // 获取相对路径（如 /images/xxx.jpg）
+      const relativePath = urlObj.pathname; 
       
-      return `${serverHost}${relativePath}`; // 动态拼接为当前可通的后端地址！
+      return `${serverHost}${relativePath}`; 
     } catch (e) {
       return path;
     }
@@ -97,7 +92,6 @@ export default function ProfilePage() {
         full_name: response.data.full_name,
         email: response.data.email
       });
-      // 使用转换器转换旧头像
       setImagePreviewState(getDisplayImageUrl(response.data.image_path));
     } catch (error) {
       showToast("Failed to load profile data", "error");
@@ -158,7 +152,8 @@ export default function ProfilePage() {
       if (error.response && error.response.status === 422) {
         setErrors(error.response.data.errors);
       } else {
-        showToast("Failed to update profile", "error");
+        // 打印后端返回的真实错误信息
+        showToast(error.response?.data?.message || "Failed to update profile", "error");
       }
     } finally {
       setIsSaving(false);
@@ -258,7 +253,7 @@ export default function ProfilePage() {
 
             <div className="px-5 sm:px-8 py-4 sm:py-5 border-t border-sunset-primary/10 flex flex-row justify-end items-center gap-3 shrink-0 bg-gray-50/50 rounded-b-3xl sm:rounded-b-[2rem]">
               <Button variant="ghost" className="flex-1 sm:flex-none px-6 h-11 text-xs sm:text-sm" onClick={() => setIsEditProfile(false)}>Cancel</Button>
-              <Button onClick={handleUpdateProfile} disabled={isSaving} className="flex-1 sm:flex-none px-8 h-11 text-xs sm:text-sm shadow-md">
+              <Button onClick={handleUpdateProfile} disabled={isSaving} className="flex-1 sm:flex-none px-8 h-11 text-xs sm:text-sm shadow-md bg-orange-500 text-white hover:bg-orange-600">
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" />}
                 {isSaving ? "Saving..." : "Save Changes"}
               </Button>
@@ -351,9 +346,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ===============================
-          主页面内容区
-      =============================== */}
+      {/* 主页面内容区 */}
       <div className="space-y-4 sm:space-y-6 animate-in fade-in zoom-in-95 duration-300 relative z-0 pb-10">
         <header>
           <h1 className="text-2xl font-bold text-sunset-dark">Profile</h1>
@@ -367,7 +360,7 @@ export default function ProfilePage() {
                 <div className="relative mb-6">
                   {user?.image_path ? (
                     <img 
-                      src={getDisplayImageUrl(user.image_path) || ""} // 【核心修复】：动态转换旧 IP 为最新可用 IP！
+                      src={getDisplayImageUrl(user.image_path) || ""}
                       alt="Profile Avatar" 
                       className="w-32 h-32 sm:w-40 sm:h-40 rounded-[2rem] sm:rounded-[2.5rem] object-cover shadow-xl border-4 border-white shrink-0"
                       referrerPolicy="no-referrer"
@@ -418,7 +411,7 @@ export default function ProfilePage() {
           </div>
 
           <div className="p-5 sm:p-6 lg:px-10 border-t border-orange-500/10 flex flex-col sm:flex-row gap-3 sm:gap-4 bg-gray-50/50">
-            <Button onClick={openEditModal} className="flex-1 py-3 sm:py-6 text-sm shadow-md">
+            <Button onClick={openEditModal} className="flex-1 py-3 sm:py-6 text-sm shadow-md bg-orange-500 text-white hover:bg-orange-600">
               <User size={18} className="mr-2 inline" /> Edit Profile & Avatar
             </Button>
             

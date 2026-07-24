@@ -25,7 +25,7 @@ export default function CalendarPage() {
   const [isLoading, setIsLoading] = useState(false);
   
   // 原始动态选项 (存储从 DB 获取的所有 active 状态数据)
-  const [typesList, setTypesList] = useState<any[]>([]); // 数据库状态为 1 的 Types 列表
+  const [typesList, setTypesList] = useState<any[]>([]);
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [allMethods, setAllMethods] = useState<any[]>([]);
 
@@ -37,7 +37,7 @@ export default function CalendarPage() {
   
   // 表单状态
   const [editingRecord, setEditingRecord] = useState<any>(null);
-  const [activeTypeId, setActiveTypeId] = useState<string>(""); // 当前选中的 Type ID
+  const [activeTypeId, setActiveTypeId] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     title: "", description: "", price: "", date: "", time: "", payment_method_id: "", category_id: "" 
@@ -176,7 +176,7 @@ export default function CalendarPage() {
         category_id: String(record.category_id) 
       });
     } else {
-      // 新增模式：默认选中第一个 Active 的 Type
+      // 新增模式
       setEditingRecord(null);
       const defaultType = typesList.length > 0 ? typesList[0] : null;
       const defaultTypeId = defaultType ? String(defaultType.id) : "";
@@ -213,7 +213,6 @@ export default function CalendarPage() {
     setIsSaving(true);
     setErrors({});
     
-    // 判断当前选中的 Type 名称是否包含 income 词汇
     const currentTypeObj = typesList.find(t => String(t.id) === String(activeTypeId));
     const isIncome = currentTypeObj?.name?.toLowerCase().includes('income');
     const endpoint = isIncome ? '/incomes' : '/expenses';
@@ -378,9 +377,11 @@ export default function CalendarPage() {
                           <span className={`font-black text-lg ${r.type === 'income' ? 'text-emerald-600' : 'text-red-500'}`}>
                             {r.type === 'income' ? '+' : '-'}RM {formatPrice(r.price)}
                           </span>
-                          <div className="flex gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => openForm(r)} className="p-1.5 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Edit2 size={14}/></button>
-                            <button onClick={() => setDeletingRecord(r)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14}/></button>
+                          
+                          {/* 【修改处】：取消 opacity-0 和 group-hover 隐藏限制，让 Edit 和 Delete 图标常亮直接显示 */}
+                          <div className="flex gap-1 items-center bg-slate-50 p-1 rounded-xl border border-gray-100">
+                            <button onClick={() => openForm(r)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Edit"><Edit2 size={15}/></button>
+                            <button onClick={() => setDeletingRecord(r)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete"><Trash2 size={15}/></button>
                           </div>
                         </div>
                       </div>
@@ -409,7 +410,7 @@ export default function CalendarPage() {
 
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
               
-              {/* 【核心修改处】：动态渲染当前 user_id 且 status=1 的 Types 选项卡 */}
+              {/* 动态 Types 选项卡 */}
               {typesList.length > 0 ? (
                 <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-6 max-w-sm mx-auto shadow-inner border border-gray-200/50">
                   {typesList.map((t: any) => {
@@ -488,7 +489,7 @@ export default function CalendarPage() {
                     </div>
                   </div>
 
-                  {/* Category 下拉框与空状态 */}
+                  {/* Category 下拉框 */}
                   <div>
                     <div className="flex items-center justify-between pl-1 mb-1.5">
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest block">Category</label>
@@ -522,7 +523,7 @@ export default function CalendarPage() {
                     {errors.category_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.category_id[0]}</p>}
                   </div>
 
-                  {/* Payment Method 下拉框与空状态 */}
+                  {/* Payment Method 下拉框 */}
                   <div>
                     <div className="flex items-center justify-between pl-1 mb-1.5">
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest block">Payment Method</label>

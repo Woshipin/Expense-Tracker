@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ReceiptText, PieChart, Settings, LogOut,
   Calendar, DollarSign, BarChart3, ChevronLeft,
   ChevronRight, Tags, CreditCard, Users, Loader2, Layers,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, User
 } from 'lucide-react';
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Toast } from "@/components/ui";
@@ -17,9 +17,13 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const safePathname = pathname || "";
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
+  // 移动端菜单状态
+  const [isMobileTransactionsOpen, setIsMobileTransactionsOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTransactionsOpen, setIsTransactionsOpen] = useState(false); // 桌面端 Transactions Dropdown
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
   const [user, setUser] = useState<any>(null);
@@ -27,16 +31,16 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
   const isAuthPage = ['/login', '/register', '/forgot-password', '/reset-password'].includes(safePathname);
   
-  const settingsSubPaths = ['/profile', '/types', '/categories', '/payment-methods'];
-  const isOnSettingsPage = settingsSubPaths.some(p => safePathname === p || safePathname.startsWith(p));
+  // Transactions 下拉包含的子路径
+  const transactionSubPaths = ['/expenses', '/income', '/types', '/categories', '/payment-methods'];
+  const isTransactionsActive = transactionSubPaths.some(p => safePathname === p || safePathname.startsWith(p));
 
+  // 路由如果在 Transactions 组内，自动展开 Dropdown
   useEffect(() => {
-    if (isOnSettingsPage) setIsSettingsOpen(true);
-  }, [isOnSettingsPage]);
+    if (isTransactionsActive) setIsTransactionsOpen(true);
+  }, [isTransactionsActive]);
 
-  // ==========================================
-  // 首次载入时的初始化
-  // ==========================================
+  // 首次载入初始化鉴权
   useEffect(() => {
     let isMounted = true;
 
@@ -65,24 +69,18 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     };
   }, []);
 
-  // =========================================================================
-  // 改进：自适应双轨制路由守卫（解决登录后回弹的问题，同时保持秒开性能）
-  // =========================================================================
+  // 路由守卫
   useEffect(() => {
     if (isCheckingAuth) return;
 
-    // 获取本地存储的 Token 状态
     const token = typeof window !== "undefined" ? localStorage.getItem("auth_token") : null;
 
     if (!token) {
-      // 轨道一：完全未登录（本地无Token），且当前不是免鉴权页面 -> 拦截至登录页
       if (!isAuthPage) {
         router.replace('/login');
       }
     } else {
-      // 轨道二：有 Token
       if (!user) {
-        // 刚登录成功跳转，或者刷新了页面，内存 user 为空 -> 立即补全一次用户信息
         const fetchUserAfterLogin = async () => {
           setIsCheckingAuth(true);
           try {
@@ -98,7 +96,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         };
         fetchUserAfterLogin();
       } else {
-        // 有 Token 且内存有用户，如果还在登录页 -> 送进控制台
         if (isAuthPage) {
           router.replace('/dashboard');
         }
@@ -151,46 +148,48 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     );
   }
 
-  const mainNavItems = [
-    { id: '/dashboard',   label: 'Dashboard',  icon: LayoutDashboard },
-    { id: '/ai-insights', label: 'AI Insights', icon: BarChart3 },
-    { id: '/users',       label: 'Users',       icon: Users },
-    { id: '/calendar',    label: 'Calendar',    icon: Calendar },
-    { id: '/expenses',    label: 'Expenses',    icon: ReceiptText },
-    { id: '/income',      label: 'Income',      icon: DollarSign },
-    { id: '/budget',      label: 'Budget',      icon: PieChart },
-  ];
-
-  const settingsSubItems = [
-    { id: '/profile',          label: 'Profile',          icon: Settings },
-    { id: '/types',            label: 'Types',            icon: Layers },
-    { id: '/categories',       label: 'Categories',       icon: Tags },
-    { id: '/payment-methods',  label: 'Payment Methods',  icon: CreditCard },
-  ];
-
-  const mobileNavItems = [
-    { id: '/dashboard',   label: 'Dash',      icon: LayoutDashboard },
-    { id: '/expenses',    label: 'Expenses',  icon: ReceiptText },
-    { id: '/income',      label: 'Income',    icon: DollarSign },
-    { id: '/ai-insights', label: 'AI',        icon: BarChart3 },
-    { id: 'settings_menu', label: 'Settings',  icon: Settings }, 
-  ];
-
-  const moreMenuPaths = ['/users', '/calendar', '/budget', '/profile', '/types', '/categories', '/payment-methods'];
-
-  const isActive = (id: string) =>
-    safePathname === id || (safePathname.startsWith(id) && id !== '/');
-
-  const isSettingsActive = settingsSubItems.some(i => isActive(i.id));
+  const isActive = (id: string) => safePathname === id || (safePathname.startsWith(id) && id !== '/');
   const canSeeUsers = user?.role === 0 || user?.role === 1;
+
+  // 1. 桌面端主导航列表 (排序: Dashboard -> AI Insights -> Users -> Calendar -> Budget)
+  const desktopNavItems = [
+    { id: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, show: true },
+    { id: '/ai-insights', label: 'AI Insights', icon: BarChart3,       show: true },
+    { id: '/users',       label: 'Users',       icon: Users,           show: canSeeUsers },
+    { id: '/calendar',    label: 'Calendar',    icon: Calendar,        show: true },
+    { id: '/budget',      label: 'Budget',      icon: PieChart,        show: true },
+  ];
+
+  // 2. Transactions Dropdown 子菜单
+  const transactionSubItems = [
+    { id: '/expenses',        label: 'Expenses',        icon: ReceiptText },
+    { id: '/income',          label: 'Income',          icon: DollarSign },
+    { id: '/types',           label: 'Types',           icon: Layers },
+    { id: '/categories',      label: 'Categories',      icon: Tags },
+    { id: '/payment-methods', label: 'Payment Methods', icon: CreditCard },
+  ];
+
+  // 3. 移动端底部导航栏项 (顺序: Dashboard -> AI Insights -> Calendar -> Transactions -> Settings)
+  const mobileBottomNavItems = [
+    { id: '/dashboard',          label: 'Dash',         icon: LayoutDashboard },
+    { id: '/ai-insights',        label: 'AI',           icon: BarChart3 },
+    { id: '/calendar',           label: 'Calendar',     icon: Calendar },
+    { id: 'transactions_menu',   label: 'Transactions', icon: ReceiptText }, 
+    { id: 'settings_menu',       label: 'Settings',     icon: Settings }, 
+  ];
+
+  const moreMenuPaths = ['/profile', '/budget', '/users'];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-red-50 to-orange-100 flex selection:bg-sunset-primary/20">
       
-      {/* Desktop Sidebar */}
+      {/* =========================================================================
+          Desktop Sidebar
+      ========================================================================= */}
       <aside 
         className={`hidden md:flex flex-col bg-gradient-to-b from-orange-100/90 via-orange-50/90 to-red-100/90 backdrop-blur-md shadow-[4px_0_24px_rgba(234,88,12,0.08)] border-0 transition-all duration-300 relative z-40 ${isSidebarOpen ? "w-64" : "w-20"}`}
       >
+        {/* Brand Header */}
         <div className="p-6 flex items-center gap-3 overflow-hidden">
           <div className="w-10 h-10 rounded-[12px] bg-amber-400 text-sunset-dark flex flex-shrink-0 items-center justify-center font-bold text-2xl shadow-sm tracking-tight">+</div>
           {isSidebarOpen && (
@@ -201,24 +200,42 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           )}
         </div>
 
+        {/* User Card (带 Profile 按钮和 Hover Tooltip) */}
         <div className="px-4 mb-4 shrink-0">
           <div 
-            className={`rounded-2xl border border-orange-300 bg-white/40 flex items-center transition-all overflow-hidden ${isSidebarOpen ? "p-3 gap-3" : "justify-center p-2"}`}
+            className={`rounded-2xl border border-orange-300 bg-white/40 flex items-center justify-between transition-all overflow-hidden ${isSidebarOpen ? "p-3 gap-2" : "justify-center p-2"}`}
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#f89c8a] to-red-500 flex items-center justify-center text-white font-bold shrink-0 shadow-sm uppercase">
-              {user?.full_name ? user.full_name.charAt(0) : 'U'}
-            </div>
-            {isSidebarOpen && (
-              <div className="flex flex-col leading-tight overflow-hidden">
-                <span className="font-bold text-black text-sm whitespace-nowrap truncate">{user?.full_name || 'User'}</span>
-                <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-0.5">
-                  {getRoleName(user?.role)}
-                </span>
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#f89c8a] to-red-500 flex items-center justify-center text-white font-bold shrink-0 shadow-sm uppercase text-sm">
+                {user?.full_name ? user.full_name.charAt(0) : 'U'}
               </div>
+              {isSidebarOpen && (
+                <div className="flex flex-col leading-tight min-w-0 flex-1">
+                  <span className="font-bold text-black text-sm whitespace-nowrap truncate" title={user?.full_name}>{user?.full_name || 'User'}</span>
+                  <span className="text-[10px] font-bold text-orange-600 uppercase tracking-widest mt-0.5">
+                    {getRoleName(user?.role)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Profile 图标按钮与 Hover 提示 */}
+            {isSidebarOpen && (
+              <button
+                onClick={() => router.push('/profile')}
+                className="p-1.5 rounded-xl hover:bg-orange-200/60 text-sunset-dark/70 hover:text-orange-600 transition-all relative group shrink-0"
+                title="Profile"
+              >
+                <User size={18} strokeWidth={2.5} />
+                <span className="absolute left-1/2 -translate-x-1/2 top-full mt-1.5 px-2 py-1 bg-sunset-dark text-white text-[10px] font-bold rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 whitespace-nowrap shadow-md">
+                  Profile
+                </span>
+              </button>
             )}
           </div>
         </div>
 
+        {/* Expand / Collapse Button */}
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="absolute -right-3 top-8 w-6 h-6 bg-white border border-orange-300 rounded-full flex items-center justify-center text-sunset-dark hover:text-orange-500 shadow-sm z-50"
@@ -226,8 +243,11 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           {isSidebarOpen ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
         </button>
 
-        <nav className="px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
-          {mainNavItems.map((item) => (
+        {/* Navigation Section */}
+        <nav className="px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar flex-1">
+          
+          {/* 常规单项菜单：Dashboard, AI Insights, Users, Calendar, Budget */}
+          {desktopNavItems.filter(i => i.show).map((item) => (
             <button
               key={item.id}
               onClick={() => router.push(item.id)}
@@ -250,40 +270,41 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             </button>
           ))}
 
+          {/* Transactions 下拉菜单：包含 Expenses, Income, Types, Categories, Payment Methods */}
           <div>
             <button
               onClick={() => {
                 if (isSidebarOpen) {
-                  setIsSettingsOpen(prev => !prev);
+                  setIsTransactionsOpen(prev => !prev);
                 } else {
-                  router.push('/profile');
+                  router.push('/expenses');
                 }
               }}
-              className={`w-full flex items-center justify-between gap-3 rounded-2xl font-bold transition-all duration-200 group relative outline-none ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"} ${isSettingsActive ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-white/50"}`}
+              className={`w-full flex items-center justify-between gap-3 rounded-2xl font-bold transition-all duration-200 group relative outline-none ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"} ${isTransactionsActive ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-white/50"}`}
             >
               <div className="flex items-center gap-3">
-                <Settings
+                <ReceiptText
                   size={20} strokeWidth={2.5}
-                  className={`shrink-0 transition-colors ${isSettingsActive ? "text-white" : "text-black group-hover:text-sunset-primary"}`}
+                  className={`shrink-0 transition-colors ${isTransactionsActive ? "text-white" : "text-black group-hover:text-sunset-primary"}`}
                 />
-                {isSidebarOpen && <span className="whitespace-nowrap">Settings</span>}
+                {isSidebarOpen && <span className="whitespace-nowrap">Transactions</span>}
               </div>
               {isSidebarOpen && (
-                isSettingsOpen
-                  ? <ChevronUp size={14} className={isSettingsActive ? "text-white" : "text-black/40"} />
-                  : <ChevronDown size={14} className={isSettingsActive ? "text-white" : "text-black/40"} />
+                isTransactionsOpen
+                  ? <ChevronUp size={14} className={isTransactionsActive ? "text-white" : "text-black/40"} />
+                  : <ChevronDown size={14} className={isTransactionsActive ? "text-white" : "text-black/40"} />
               )}
 
               {!isSidebarOpen && (
                 <div className="absolute left-full ml-4 px-3 py-2 bg-sunset-dark text-white text-sm font-medium rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
-                  Settings
+                  Transactions
                 </div>
               )}
             </button>
 
-            {isSidebarOpen && isSettingsOpen && (
+            {isSidebarOpen && isTransactionsOpen && (
               <div className="mt-1 ml-4 pl-3 border-l-2 border-orange-200 space-y-1">
-                {settingsSubItems.map((item) => (
+                {transactionSubItems.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => router.push(item.id)}
@@ -302,9 +323,11 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </div>
             )}
           </div>
+
         </nav>
 
-        <div className="p-4 border-t border-orange-200/50">
+        {/* 底部 Logout */}
+        <div className="p-4 border-t border-orange-200/50 mt-auto">
           <button
             onClick={() => setIsLogoutModalOpen(true)}
             className={`w-full flex items-center gap-3 rounded-2xl font-bold text-black hover:bg-white/50 hover:text-red-500 transition-all group ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"}`}
@@ -324,50 +347,95 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation */}
+      {/* =========================================================================
+          Mobile Bottom Navigation
+      ========================================================================= */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-black/5 flex items-center justify-around px-2 z-50 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
-        {mobileNavItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => {
-              if (item.id === 'settings_menu') {
-                setIsMobileMenuOpen(!isMobileMenuOpen);
-              } else {
-                router.push(item.id);
-                setIsMobileMenuOpen(false);
-              }
-            }}
-            className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${
-              item.id === 'settings_menu'
-                ? (isMobileMenuOpen || moreMenuPaths.some(p => pathname === p || pathname.startsWith(p)) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500")
-                : (isActive(item.id) ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500")
-            }`}
-          >
-            <item.icon
-              size={20}
-              strokeWidth={
-                item.id === 'settings_menu'
-                  ? (isMobileMenuOpen || moreMenuPaths.some(p => pathname === p || pathname.startsWith(p)) ? 2.5 : 2)
-                  : (isActive(item.id) ? 2.5 : 2)
-              }
-              className={item.id !== 'settings_menu' && isActive(item.id) ? "text-orange-600 drop-shadow-sm" : ""}
-            />
-            <span className="text-[10px] font-bold">{item.label}</span>
-          </button>
-        ))}
+        {mobileBottomNavItems.map((item) => {
+          const isTransMenu = item.id === 'transactions_menu';
+          const isSetMenu = item.id === 'settings_menu';
+
+          const isCurrentActive = isTransMenu
+            ? (isMobileTransactionsOpen || isTransactionsActive)
+            : isSetMenu
+            ? (isMobileMenuOpen || moreMenuPaths.some(p => safePathname === p || safePathname.startsWith(p)))
+            : isActive(item.id);
+
+          return (
+            <button
+              key={item.id}
+              onClick={() => {
+                if (isTransMenu) {
+                  setIsMobileTransactionsOpen(!isMobileTransactionsOpen);
+                  setIsMobileMenuOpen(false);
+                } else if (isSetMenu) {
+                  setIsMobileMenuOpen(!isMobileMenuOpen);
+                  setIsMobileTransactionsOpen(false);
+                } else {
+                  router.push(item.id);
+                  setIsMobileTransactionsOpen(false);
+                  setIsMobileMenuOpen(false);
+                }
+              }}
+              className={`flex flex-col items-center justify-center w-16 h-full gap-1 transition-colors ${
+                isCurrentActive ? "text-orange-600" : "text-sunset-dark/50 hover:text-orange-500"
+              }`}
+            >
+              <item.icon
+                size={20}
+                strokeWidth={isCurrentActive ? 2.5 : 2}
+                className={isCurrentActive ? "text-orange-600 drop-shadow-sm" : ""}
+              />
+              <span className="text-[10px] font-bold">{item.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Mobile Drawer Menu */}
+      {/* Mobile Transactions Drawer Menu */}
+      {isMobileTransactionsOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-sunset-dark/40 backdrop-blur-sm z-40"
+          onClick={() => setIsMobileTransactionsOpen(false)}
+        >
+          <div
+            className="absolute bottom-16 right-4 left-4 sm:left-auto sm:w-72 bg-white rounded-3xl p-4 shadow-2xl border border-sunset-primary/10 animate-in slide-in-from-bottom-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest px-2 pb-2">TRANSACTIONS & SETUP</p>
+            
+            <div className="space-y-1">
+              {transactionSubItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => { router.push(item.id); setIsMobileTransactionsOpen(false); }}
+                  className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon size={18} strokeWidth={isActive(item.id) ? 2.5 : 2}
+                      className={`${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
+                    <span>{item.label}</span>
+                  </div>
+                  {isActive(item.id) && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Settings Drawer Menu (Profile, Budget, Users, Logout) */}
       {isMobileMenuOpen && (
         <div
           className="md:hidden fixed inset-0 bg-sunset-dark/40 backdrop-blur-sm z-40"
           onClick={() => setIsMobileMenuOpen(false)}
         >
           <div
-            className="absolute bottom-16 right-4 w-64 bg-white rounded-3xl p-3 shadow-2xl border border-sunset-primary/10 animate-in slide-in-from-bottom-5"
+            className="absolute bottom-16 right-4 left-4 sm:left-auto sm:w-72 bg-white rounded-3xl p-4 shadow-2xl border border-sunset-primary/10 animate-in slide-in-from-bottom-5"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-3 bg-gradient-to-br from-orange-50/50 to-red-50/50 p-3 rounded-2xl border border-orange-100 mb-2">
+            {/* User Info Header */}
+            <div className="flex items-center gap-3 bg-gradient-to-br from-orange-50/50 to-red-50/50 p-3 rounded-2xl border border-orange-100 mb-3">
               <div className="w-10 h-10 rounded-full bg-gradient-to-br from-sunset-primary to-sunset-secondary flex items-center justify-center text-white font-bold shrink-0 shadow-sm text-lg uppercase">
                 {user?.full_name ? user.full_name.charAt(0) : 'U'}
               </div>
@@ -379,9 +447,36 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               </div>
             </div>
 
-            <div className="space-y-0.5">
-              <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest px-4 pt-1 pb-1">FEATURES</p>
-              
+            <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest px-2 pb-2">SETTINGS & ACCOUNT</p>
+            
+            <div className="space-y-1">
+              {/* Profile */}
+              <button
+                onClick={() => { router.push('/profile'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/profile') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <User size={18} strokeWidth={isActive('/profile') ? 2.5 : 2}
+                    className={`${isActive('/profile') ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
+                  <span>Profile</span>
+                </div>
+                {isActive('/profile') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+              </button>
+
+              {/* Budget */}
+              <button
+                onClick={() => { router.push('/budget'); setIsMobileMenuOpen(false); }}
+                className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/budget') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <PieChart size={18} strokeWidth={isActive('/budget') ? 2.5 : 2}
+                    className={`${isActive('/budget') ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
+                  <span>Budget</span>
+                </div>
+                {isActive('/budget') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
+              </button>
+
+              {/* Users (仅管理员) */}
               {canSeeUsers && (
                 <button
                   onClick={() => { router.push('/users'); setIsMobileMenuOpen(false); }}
@@ -395,55 +490,11 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
                   {isActive('/users') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
                 </button>
               )}
-
-              <button
-                onClick={() => { router.push('/budget'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/budget') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
-              >
-                <div className="flex items-center gap-3">
-                  <PieChart size={18} strokeWidth={isActive('/budget') ? 2.5 : 2}
-                    className={`${isActive('/budget') ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
-                  <span>Budget</span>
-                </div>
-                {isActive('/budget') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
-              </button>
-
-              <button
-                onClick={() => { router.push('/calendar'); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive('/calendar') ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
-              >
-                <div className="flex items-center gap-3">
-                  <Calendar size={18} strokeWidth={isActive('/calendar') ? 2.5 : 2}
-                    className={`${isActive('/calendar') ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
-                  <span>Calendar</span>
-                </div>
-                {isActive('/calendar') && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
-              </button>
             </div>
 
-            <div className="my-1.5 mx-2 border-t border-dashed border-orange-100" />
-
-            <div className="space-y-0.5">
-              <p className="text-[10px] font-black text-orange-400 uppercase tracking-widest px-4 pb-1">SETTINGS</p>
-              
-              {settingsSubItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => { router.push(item.id); setIsMobileMenuOpen(false); }}
-                  className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 rounded-2xl font-bold transition-all duration-200 group ${isActive(item.id) ? "bg-gradient-to-br from-sunset-primary to-sunset-secondary text-white shadow-md" : "text-black hover:bg-orange-50 hover:text-sunset-primary"}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon size={18} strokeWidth={isActive(item.id) ? 2.5 : 2}
-                      className={`${isActive(item.id) ? "text-white" : "text-black group-hover:text-sunset-primary"}`} />
-                    <span>{item.label}</span>
-                  </div>
-                  {isActive(item.id) && <div className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />}
-                </button>
-              ))}
-            </div>
-
-            <div className="my-1.5 mx-2 border-t border-dashed border-orange-100" />
+            <div className="my-2 border-t border-dashed border-orange-100" />
             
+            {/* Logout */}
             <button
               onClick={() => { setIsMobileMenuOpen(false); setIsLogoutModalOpen(true); }}
               className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all"
