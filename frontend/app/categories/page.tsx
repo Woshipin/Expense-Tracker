@@ -65,7 +65,7 @@ export default function CategoriesPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 1. 从 DB 获取 Types 列表
+  // 从 DB 获取 Types 列表
   const fetchTypes = async () => {
     try {
       const response = await api.get('/types', { params: { status: '1' } });
@@ -78,7 +78,7 @@ export default function CategoriesPage() {
     }
   };
 
-  // 2. 从 DB 获取 Categories 列表
+  // 从 DB 获取 Categories 列表
   const fetchCategories = async () => {
     setIsLoading(true);
     try {
@@ -172,7 +172,6 @@ export default function CategoriesPage() {
     }
   };
 
-  // 根据从 DB 查出的 Types 动态分组 Categories
   const groupedCategories = useMemo(() => {
     if (!typesList.length) {
       return [];
@@ -211,11 +210,22 @@ export default function CategoriesPage() {
               >
                 <DynamicIcon name={viewingCategory?.icon || "Tag"} className="w-10 h-10" />
               </div>
-              <div>
+              <div className="w-full">
                 <h3 className="text-xl font-extrabold text-sunset-dark">{viewingCategory?.name}</h3>
-                <span className="inline-flex mt-1.5 py-1 px-2.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-orange-50 text-orange-600">
-                  {viewingCategory?.type?.name || typesList.find(t => String(t.id) === String(viewingCategory?.type_id))?.name || 'Category'}
-                </span>
+                
+                {/* Modal 中同时展示 Type 和 Status 标签 */}
+                <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+                  <span className="inline-flex py-1 px-2.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100/80">
+                    {viewingCategory?.type?.name || typesList.find(t => String(t.id) === String(viewingCategory?.type_id))?.name || 'Category'}
+                  </span>
+                  <span className={`inline-flex py-1 px-2.5 rounded-lg text-xs font-bold uppercase tracking-wider border ${
+                    String(viewingCategory?.status) === '1' 
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200/60' 
+                      : 'bg-rose-50 text-rose-500 border-rose-200/60'
+                  }`}>
+                    {String(viewingCategory?.status) === '1' ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
               </div>
               <p className="text-sm font-semibold text-sunset-dark/60 mt-2 px-4 bg-slate-50 py-3 rounded-xl w-full border border-gray-100">
                 {viewingCategory?.description || 'No description provided.'}
@@ -252,7 +262,6 @@ export default function CategoriesPage() {
                 {errors.name && <p className="text-xs text-red-500 mt-1 pl-1">{errors.name[0]}</p>}
               </div>
 
-              {/* 【优化后的 Select Type 区域】 */}
               <div>
                 <div className="flex items-center justify-between pl-1 mb-1.5">
                   <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest block">Select Type</label>
@@ -264,7 +273,6 @@ export default function CategoriesPage() {
                 </div>
 
                 {typesList.length === 0 ? (
-                  /* 没有 Type 数据的优化空状态提示 UI */
                   <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between text-amber-900 text-xs font-semibold animate-in fade-in duration-200">
                     <div className="flex items-center gap-2.5">
                       <AlertCircle size={18} className="text-amber-600 shrink-0" />
@@ -278,7 +286,6 @@ export default function CategoriesPage() {
                     </Link>
                   </div>
                 ) : (
-                  /* 有 Type 数据时渲染正常的 Select 下拉 */
                   <Select value={formData.type_id} onValueChange={(val) => setFormData({...formData, type_id: val})}>
                     <SelectTrigger className="bg-white rounded-xl h-11 text-sm font-medium border-orange-500/40 text-sunset-dark shadow-sm">
                       <SelectValue placeholder="Select Type" />
@@ -461,7 +468,7 @@ export default function CategoriesPage() {
             <div className="max-w-md">
               <h3 className="text-lg font-black text-sunset-dark">No Category Types Found</h3>
               <p className="text-xs font-bold text-sunset-dark/60 mt-1">
-                You haven't configured any transaction types (e.g. Expense, Income) in database yet. Please add at least one Type first.
+                You haven't configured any transaction types in database yet. Please add at least one Type first.
               </p>
             </div>
             <Link
@@ -473,7 +480,7 @@ export default function CategoriesPage() {
           </div>
         )}
 
-        {/* 栅格列表：根据从 DB 拿到的 Types 动态分组显示 */}
+        {/* 栅格列表：动态分组显示 */}
         {isLoading ? (
           <div className="text-center py-20 bg-white rounded-[24px] border"><Loader2 className="animate-spin text-orange-500 mx-auto w-10 h-10" /></div>
         ) : (
@@ -499,7 +506,17 @@ export default function CategoriesPage() {
                             <DynamicIcon name={c.icon || "Tag"} />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <h3 className="font-extrabold text-sunset-dark text-base truncate">{c.name}</h3>
+                            {/* 标题 + Status 响应式并排展示 */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <h3 className="font-extrabold text-sunset-dark text-base truncate">{c.name}</h3>
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider shrink-0 ${
+                                String(c.status) === '1' 
+                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/50' 
+                                  : 'bg-rose-50 text-rose-500 border border-rose-200/50'
+                              }`}>
+                                {String(c.status) === '1' ? 'Active' : 'Inactive'}
+                              </span>
+                            </div>
                             <p className="text-xs font-semibold text-sunset-dark/40 truncate mt-0.5">{c.description || 'No description'}</p>
                           </div>
                         </div>
