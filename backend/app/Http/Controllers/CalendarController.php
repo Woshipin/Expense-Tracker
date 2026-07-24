@@ -12,11 +12,11 @@ class CalendarController extends Controller
     {
         $year = $request->input('year', date('Y'));
         $month = $request->input('month', date('m'));
-        $userId = auth()->id(); // 获取当前用户 ID
+        $userId = auth()->id(); // 安全隔离：获取当前登录用户 ID
 
-        // 获取该用户的开销
+        // 获取该用户的支出 (Expense)
         $expenses = Expense::with(['category', 'payment_method'])
-            ->where('user_id', $userId) // 安全隔离：只查当前用户
+            ->where('user_id', $userId)
             ->whereYear('date', $year)
             ->whereMonth('date', $month)
             ->get()
@@ -25,9 +25,9 @@ class CalendarController extends Controller
                 return $item;
             });
 
-        // 获取该用户的收入
+        // 获取该用户的收入 (Income)
         $incomes = Income::with(['category', 'payment_method'])
-            ->where('user_id', $userId) // 安全隔离：只查当前用户
+            ->where('user_id', $userId)
             ->whereYear('date', $year)
             ->whereMonth('date', $month)
             ->get()
@@ -36,7 +36,7 @@ class CalendarController extends Controller
                 return $item;
             });
 
-        // 合并数据并按日期和时间排序
+        // 合并数据并按日期和时间升序排序
         $merged = $expenses->concat($incomes)
             ->sortBy(['date', 'time'])
             ->values();
