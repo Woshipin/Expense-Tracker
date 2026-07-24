@@ -25,6 +25,7 @@ export default function CalendarPage() {
   const [isLoading, setIsLoading] = useState(false);
   
   // 原始动态选项 (存储从 DB 获取的所有 active 状态数据)
+  const [typesList, setTypesList] = useState<any[]>([]); // 数据库状态为 1 的 Types 列表
   const [allCategories, setAllCategories] = useState<any[]>([]);
   const [allMethods, setAllMethods] = useState<any[]>([]);
 
@@ -36,7 +37,7 @@ export default function CalendarPage() {
   
   // 表单状态
   const [editingRecord, setEditingRecord] = useState<any>(null);
-  const [formType, setFormType] = useState<'expense'|'income'>('expense');
+  const [activeTypeId, setActiveTypeId] = useState<string>(""); // 当前选中的 Type ID
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     title: "", description: "", price: "", date: "", time: "", payment_method_id: "", category_id: "" 
@@ -48,13 +49,19 @@ export default function CalendarPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 从 DB 获取 status=1 的所有类型数据
+  // 1. 从 DB 获取当前用户 status=1 的 Types, Categories 和 Payment Methods
   const fetchOptions = async () => {
     try {
-      const [catsRes, methodsRes] = await Promise.all([
+      const [catsRes, methodsRes, typesRes] = await Promise.all([
         api.get('/categories', { params: { status: '1' } }), 
-        api.get('/payment-methods', { params: { status: '1' } })
+        api.get('/payment-methods', { params: { status: '1' } }),
+        api.get('/types', { params: { status: '1' } })
       ]);
+
+      const tList = typesRes.data.data || typesRes.data || [];
+      const activeTypes = tList.filter((t: any) => String(t.status) === '1');
+      setTypesList(activeTypes);
+
       setAllCategories(catsRes.data.data || catsRes.data || []);
       setAllMethods(methodsRes.data.data || methodsRes.data || []);
     } catch (e) {
@@ -84,20 +91,21 @@ export default function CalendarPage() {
     fetchCalendarData();
   }, [currentDate]);
 
-  // 根据当前 selected formType (Expense / Income) 过滤合规的 Option 列表
+  // 根据当前 selected activeTypeId 过滤可用的 Category 列表
   const activeCategoryOptions = useMemo(() => {
-    const targetTypeId = formType === 'expense' ? '1' : '2';
+    if (!activeTypeId) return [];
     return allCategories.filter((c: any) => 
-      String(c.status) === '1' && (String(c.type_id) === targetTypeId || c.type?.name?.toLowerCase() === formType)
+      String(c.status) === '1' && String(c.type_id) === String(activeTypeId)
     );
-  }, [allCategories, formType]);
+  }, [allCategories, activeTypeId]);
 
+  // 根据当前 selected activeTypeId 过滤可用的 Payment Method 列表
   const activeMethodOptions = useMemo(() => {
-    const targetTypeId = formType === 'expense' ? '1' : '2';
+    if (!activeTypeId) return [];
     return allMethods.filter((m: any) => 
-      String(m.status) === '1' && (String(m.type_id) === targetTypeId || m.type?.name?.toLowerCase() === formType)
+      String(m.status) === '1' && String(m.type_id) === String(activeTypeId)
     );
-  }, [allMethods, formType]);
+  }, [allMethods, activeTypeId]);
 
   // 日历计算算法
   const year = currentDate.getFullYear();
@@ -131,16 +139,16 @@ export default function CalendarPage() {
     setIsRecordListOpen(true);
   };
 
-  // 处理在弹窗中手动切换 Expense <-> Income 选项卡
-  const handleFormTypeChange = (newType: 'expense' | 'income') => {
-    setFormType(newType);
-    const targetTypeId = newType === 'expense' ? '1' : '2';
+  // 切换 Type Tab 时更新 Category 和 Payment Method
+  const handleTypeTabChange = (typeObj: any) => {
+    const typeIdStr = String(typeObj.id);
+    setActiveTypeId(typeIdStr);
 
     const cats = allCategories.filter((c: any) => 
-      String(c.status) === '1' && (String(c.type_id) === targetTypeId || c.type?.name?.toLowerCase() === newType)
+      String(c.status) === '1' && String(c.type_id) === typeIdStr
     );
     const methods = allMethods.filter((m: any) => 
-      String(m.status) === '1' && (String(m.type_id) === targetTypeId || m.type?.name?.toLowerCase() === newType)
+      String(m.status) === '1' && String(m.type_id) === typeIdStr
     );
 
     setFormData(prev => ({
@@ -150,13 +158,13 @@ export default function CalendarPage() {
     }));
   };
 
-  const openForm = (record: any = null, type: 'expense'|'income' = 'expense') => {
+  const openForm = (record: any = null) => {
     setErrors({});
     if (record) {
       // 编辑模式
-      const currentType = record.type || 'expense';
       setEditingRecord(record);
-      setFormType(currentType);
+      const recordTypeId = String(record.type_id || record.category?.type_id || (typesList.length > 0 ? typesList[0].id : ""));
+      setActiveTypeId(recordTypeId);
       
       setFormData({
         title: record.title, 
@@ -168,16 +176,17 @@ export default function CalendarPage() {
         category_id: String(record.category_id) 
       });
     } else {
-      // 新增模式
+      // 新增模式：默认选中第一个 Active 的 Type
       setEditingRecord(null);
-      setFormType(type);
+      const defaultType = typesList.length > 0 ? typesList[0] : null;
+      const defaultTypeId = defaultType ? String(defaultType.id) : "";
+      setActiveTypeId(defaultTypeId);
 
-      const targetTypeId = type === 'expense' ? '1' : '2';
       const cats = allCategories.filter((c: any) => 
-        String(c.status) === '1' && (String(c.type_id) === targetTypeId || c.type?.name?.toLowerCase() === type)
+        String(c.status) === '1' && String(c.type_id) === defaultTypeId
       );
       const methods = allMethods.filter((m: any) => 
-        String(m.status) === '1' && (String(m.type_id) === targetTypeId || m.type?.name?.toLowerCase() === type)
+        String(m.status) === '1' && String(m.type_id) === defaultTypeId
       );
 
       const now = new Date();
@@ -197,13 +206,17 @@ export default function CalendarPage() {
 
   const handleSave = async () => {
     if (activeCategoryOptions.length === 0 || activeMethodOptions.length === 0) {
-      showToast(`Please ensure you have active ${formType === 'expense' ? 'Expense' : 'Income'} Categories and Methods.`, "warning");
+      showToast("Please ensure you have active Category and Payment Method for this type.", "warning");
       return;
     }
 
     setIsSaving(true);
     setErrors({});
-    const endpoint = formType === 'expense' ? '/expenses' : '/incomes';
+    
+    // 判断当前选中的 Type 名称是否包含 income 词汇
+    const currentTypeObj = typesList.find(t => String(t.id) === String(activeTypeId));
+    const isIncome = currentTypeObj?.name?.toLowerCase().includes('income');
+    const endpoint = isIncome ? '/incomes' : '/expenses';
     
     try {
       if (editingRecord) {
@@ -226,7 +239,9 @@ export default function CalendarPage() {
 
   const handleDelete = async () => {
     if (!deletingRecord) return;
-    const endpoint = deletingRecord.type === 'expense' ? '/expenses' : '/incomes';
+    const isIncome = deletingRecord.type === 'income' || deletingRecord.category?.type?.name?.toLowerCase().includes('income');
+    const endpoint = isIncome ? '/incomes' : '/expenses';
+
     try {
       await api.delete(`${endpoint}/${deletingRecord.id}`);
       showToast('Record deleted successfully', 'success');
@@ -252,7 +267,7 @@ export default function CalendarPage() {
           <h1 className="text-2xl font-bold text-sunset-dark">Calendar</h1>
           <p className="text-sm font-medium text-sunset-dark/60 mt-1">Review your transactions day-by-day.</p>
         </div>
-        <Button onClick={() => openForm(null, 'expense')} className="px-5 py-2.5 text-sm h-auto flex items-center shadow-md bg-orange-500 text-white hover:bg-orange-600">
+        <Button onClick={() => openForm(null)} className="px-5 py-2.5 text-sm h-auto flex items-center shadow-md bg-orange-500 text-white hover:bg-orange-600">
           <Plus size={16} className="mr-1.5 shrink-0" /> Add Record
         </Button>
       </header>
@@ -375,7 +390,7 @@ export default function CalendarPage() {
               
               <div className="p-6 border-t border-sunset-primary/10 flex gap-3 flex-col sm:flex-row bg-gray-50/50">
                 <Button variant="ghost" onClick={() => setIsRecordListOpen(false)} className="w-full sm:w-auto px-6 border bg-white shadow-sm">Close</Button>
-                <Button onClick={() => openForm(null, 'expense')} className="w-full flex-1 shadow-md bg-sunset-dark text-white hover:bg-black"><Plus size={16} className="mr-2 inline"/> Add Record</Button>
+                <Button onClick={() => openForm(null)} className="w-full flex-1 shadow-md bg-sunset-dark text-white hover:bg-black"><Plus size={16} className="mr-2 inline"/> Add Record</Button>
               </div>
            </div>
         </div>
@@ -394,31 +409,62 @@ export default function CalendarPage() {
 
             <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
               
-              {/* Type Switcher */}
-              <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-6 max-w-sm mx-auto shadow-inner border border-gray-200/50">
-                <button type="button" disabled={!!editingRecord} onClick={() => handleFormTypeChange('expense')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${formType === 'expense' ? 'bg-white text-red-600 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed'}`}>Expense</button>
-                <button type="button" disabled={!!editingRecord} onClick={() => handleFormTypeChange('income')} className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${formType === 'income' ? 'bg-white text-emerald-600 shadow-sm border border-gray-200/50' : 'text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed'}`}>Income</button>
-              </div>
+              {/* 【核心修改处】：动态渲染当前 user_id 且 status=1 的 Types 选项卡 */}
+              {typesList.length > 0 ? (
+                <div className="flex bg-gray-100 p-1.5 rounded-2xl mb-6 max-w-sm mx-auto shadow-inner border border-gray-200/50">
+                  {typesList.map((t: any) => {
+                    const isSelected = String(activeTypeId) === String(t.id);
+                    const isIncome = t.name?.toLowerCase().includes('income');
+                    const activeTextColor = isIncome ? 'text-emerald-600' : 'text-red-600';
+
+                    return (
+                      <button 
+                        key={t.id} 
+                        type="button" 
+                        disabled={!!editingRecord} 
+                        onClick={() => handleTypeTabChange(t)} 
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                          isSelected 
+                            ? `bg-white ${activeTextColor} shadow-sm border border-gray-200/50` 
+                            : 'text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                        }`}
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-3 mb-6 bg-amber-50 border border-amber-200/80 rounded-2xl flex items-center justify-between text-amber-900 text-xs font-semibold">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={16} className="text-amber-600 shrink-0" />
+                    <span>No active Transaction Types found.</span>
+                  </div>
+                  <Link href="/types" className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0">
+                    Go to Types
+                  </Link>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6 items-start">
                 {/* Left Column */}
-                <div className={`${formType === 'expense' ? 'bg-red-50/50 border-red-100' : 'bg-emerald-50/50 border-emerald-100'} rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border flex flex-col gap-4 sm:gap-5 transition-colors`}>
-                  <h3 className={`text-xs sm:text-sm font-black uppercase tracking-widest flex items-center ${formType === 'expense' ? 'text-red-500' : 'text-emerald-500'}`}>
+                <div className="bg-orange-50/40 rounded-2xl sm:rounded-[1.5rem] p-5 sm:p-6 border border-orange-100 flex flex-col gap-4 sm:gap-5 transition-colors">
+                  <h3 className="text-xs sm:text-sm font-black uppercase tracking-widest flex items-center text-orange-600">
                     <Wallet size={16} className="mr-2" /> Basic Details
                   </h3>
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Title</label>
-                    <Input placeholder={formType === 'expense' ? "E.g. Groceries" : "E.g. Salary"} value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" />
+                    <Input placeholder="E.g. Item Title" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="h-10 sm:h-11 text-sm bg-white" />
                     {errors.title && <p className="text-xs text-red-500 mt-1 pl-1">{errors.title[0]}</p>}
                   </div>
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Amount (RM)</label>
-                    <Input type="number" step="0.01" placeholder="0.00" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className={`h-10 sm:h-11 text-sm bg-white font-black ${formType==='expense' ? 'text-red-600' : 'text-emerald-600'}`} />
+                    <Input type="number" step="0.01" placeholder="0.00" value={formData.price} onChange={(e) => setFormData({...formData, price: e.target.value})} className="h-10 sm:h-11 text-sm bg-white font-black text-sunset-dark" />
                     {errors.price && <p className="text-xs text-red-500 mt-1 pl-1">{errors.price[0]}</p>}
                   </div>
                   <div>
                     <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Description (Optional)</label>
-                    <textarea placeholder="Enter description..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className={`w-full rounded-xl border p-3 text-sm bg-white focus:outline-none focus:ring-2 transition-all min-h-[80px] custom-scrollbar ${formType === 'expense' ? 'border-red-500/40 focus:border-red-500 focus:ring-red-500/30' : 'border-emerald-500/40 focus:border-emerald-500 focus:ring-emerald-500/30'}`} />
+                    <textarea placeholder="Enter description..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} className="w-full rounded-xl border border-orange-500/40 focus:border-orange-500 p-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 transition-all min-h-[80px] custom-scrollbar" />
                     {errors.description && <p className="text-xs text-red-500 mt-1 pl-1">{errors.description[0]}</p>}
                   </div>
                 </div>
@@ -432,17 +478,17 @@ export default function CalendarPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Date</label>
-                      <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className={`h-10 sm:h-11 text-sm bg-white focus:ring-2 transition-all ${formType === 'expense' ? 'focus:ring-red-500/30 border-red-500/30 focus:border-red-500' : 'focus:ring-emerald-500/30 border-emerald-500/30 focus:border-emerald-500'}`} />
+                      <Input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-orange-500/30 focus:border-orange-500 focus:ring-orange-500/20" />
                       {errors.date && <p className="text-xs text-red-500 mt-1 pl-1">{errors.date[0]}</p>}
                     </div>
                     <div>
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest pl-1 mb-1 block">Time</label>
-                      <Input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} className={`h-10 sm:h-11 text-sm bg-white focus:ring-2 transition-all ${formType === 'expense' ? 'focus:ring-red-500/30 border-red-500/30 focus:border-red-500' : 'focus:ring-emerald-500/30 border-emerald-500/30 focus:border-emerald-500'}`} />
+                      <Input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} className="h-10 sm:h-11 text-sm bg-white border-orange-500/30 focus:border-orange-500 focus:ring-orange-500/20" />
                       {errors.time && <p className="text-xs text-red-500 mt-1 pl-1">{errors.time[0]}</p>}
                     </div>
                   </div>
 
-                  {/* 【优化后的 Category 字段及空状态 UI】 */}
+                  {/* Category 下拉框与空状态 */}
                   <div>
                     <div className="flex items-center justify-between pl-1 mb-1.5">
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest block">Category</label>
@@ -457,7 +503,7 @@ export default function CalendarPage() {
                       <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl flex items-center justify-between text-amber-900 text-xs font-semibold">
                         <div className="flex items-center gap-2">
                           <AlertCircle size={16} className="text-amber-600 shrink-0" />
-                          <span>No {formType === 'expense' ? 'Expense' : 'Income'} Category found.</span>
+                          <span>No Category found for this type.</span>
                         </div>
                         <Link href="/categories" className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0">
                           Go to Categories
@@ -465,7 +511,7 @@ export default function CalendarPage() {
                       </div>
                     ) : (
                       <Select value={formData.category_id} onValueChange={(val) => setFormData({...formData, category_id: val})}>
-                        <SelectTrigger className={`bg-white rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm transition-all focus:ring-2 ${formType === 'expense' ? 'border-red-500/50 hover:border-red-500 focus:ring-red-500/30' : 'border-emerald-500/50 hover:border-emerald-500 focus:ring-emerald-500/30'}`}>
+                        <SelectTrigger className="bg-white rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm border-orange-500/50 hover:border-orange-500 focus:ring-orange-500/30">
                           <SelectValue placeholder="Select Category" />
                         </SelectTrigger>
                         <SelectContent className="z-[10050]">
@@ -476,7 +522,7 @@ export default function CalendarPage() {
                     {errors.category_id && <p className="text-xs text-red-500 mt-1 pl-1">{errors.category_id[0]}</p>}
                   </div>
 
-                  {/* 【优化后的 Payment Method 字段及空状态 UI】 */}
+                  {/* Payment Method 下拉框与空状态 */}
                   <div>
                     <div className="flex items-center justify-between pl-1 mb-1.5">
                       <label className="text-[10px] sm:text-xs font-bold text-sunset-dark/70 uppercase tracking-widest block">Payment Method</label>
@@ -491,7 +537,7 @@ export default function CalendarPage() {
                       <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-xl flex items-center justify-between text-amber-900 text-xs font-semibold">
                         <div className="flex items-center gap-2">
                           <AlertCircle size={16} className="text-amber-600 shrink-0" />
-                          <span>No {formType === 'expense' ? 'Expense' : 'Income'} Method found.</span>
+                          <span>No Payment Method found for this type.</span>
                         </div>
                         <Link href="/payment-methods" className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-bold transition-all shrink-0">
                           Go to Methods
@@ -499,7 +545,7 @@ export default function CalendarPage() {
                       </div>
                     ) : (
                       <Select value={formData.payment_method_id} onValueChange={(val) => setFormData({...formData, payment_method_id: val})}>
-                        <SelectTrigger className={`bg-white rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm transition-all focus:ring-2 ${formType === 'expense' ? 'border-red-500/50 hover:border-red-500 focus:ring-red-500/30' : 'border-emerald-500/50 hover:border-emerald-500 focus:ring-emerald-500/30'}`}>
+                        <SelectTrigger className="bg-white rounded-xl h-10 sm:h-11 text-xs sm:text-sm font-medium text-sunset-dark shadow-sm border-orange-500/50 hover:border-orange-500 focus:ring-orange-500/30">
                           <SelectValue placeholder="Select Method" />
                         </SelectTrigger>
                         <SelectContent className="z-[10050]">
@@ -519,7 +565,7 @@ export default function CalendarPage() {
               <Button 
                 onClick={handleSave} 
                 disabled={isSaving || activeCategoryOptions.length === 0 || activeMethodOptions.length === 0} 
-                className={`flex-1 sm:flex-none px-6 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm flex items-center justify-center shadow-md text-white border-transparent disabled:opacity-50 disabled:cursor-not-allowed ${formType === 'expense' ? 'bg-red-500 hover:bg-red-600' : 'bg-emerald-500 hover:bg-emerald-600'}`}
+                className="flex-1 sm:flex-none px-6 sm:px-8 h-10 sm:h-11 text-xs sm:text-sm flex items-center justify-center shadow-md text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-2 shrink-0" />}
                 {isSaving ? "Saving..." : "Save Record"}
