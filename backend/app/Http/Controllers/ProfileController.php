@@ -20,11 +20,11 @@ class ProfileController extends Controller
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        // 基础字段校验
         $request->validate([
-            'full_name' => 'required|string|max:255',
-            'email'     => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
-            'image'     => 'nullable', // 放宽硬性校验，由下方 PHP 代码动态安全处理
+            'full_name'    => 'required|string|max:255',
+            'email'        => ['required', 'string', 'email', 'max:255', Rule::unique('users')->ignore($user->id)],
+            'image_base64' => 'nullable|string', 
+            'image'        => 'nullable',
         ]);
 
         try {
@@ -33,42 +33,62 @@ class ProfileController extends Controller
                 'email'     => $request->email,
             ];
 
-            // 处理图片上传
-            if ($request->hasFile('image')) {
-                $file = $request->file('image');
+            // 【核心修复】：优先处理前端传来的 Base64 图片 (100% 穿透所有云服务器和 Axios 传输限制)
+            if ($request->filled('image_base64')) {
+                $base64Image = $request->image_base64;
 
+                if (preg_match('/^data:image\/(\w+);base64,/', $base64Image, $type)) {
+                    $imageData = substr($base64Image, strpos($base64Image, ',') + 1);
+                    $fileType = strtolower($type[1]); // jpg, png, gif, webp
+
+                    if (in_array($fileType, ['jpg', 'jpeg', 'gif', 'png', 'webp'])) {
+                        $imageData = base64_decode($imageData);
+
+                        if ($imageData !== false) {
+                            $destinationPath = public_path('images');
+                            if (!file_exists($destinationPath)) {
+                                @mkdir($destinationPath, 0777, true);
+                            }
+
+                            // 清理旧头像
+                            if ($user->image_path) {
+                                $parsedPath = parse_url($user->image_path, PHP_URL_PATH);
+                                if ($parsedPath) {
+                                    $oldFilename = basename($parsedPath);
+                                    $oldFileLocal = public_path('images/' . $oldFilename);
+                                    if (file_exists($oldFileLocal) && is_file($oldFileLocal)) {
+                                        @unlink($oldFileLocal);
+                                    }
+                                }
+                            }
+
+                            $filename = time() . '_' . uniqid() . '.' . $fileType;
+                            file_put_contents($destinationPath . '/' . $filename, $imageData);
+
+                            // 100% 成功生成并写入 DB 的图片代理 URL
+                            $data['image_path'] = url('api/images/' . $filename);
+                        }
+                    }
+                }
+            } 
+            // 传统 File 方式兜底
+            else if ($request->hasFile('image') || $request->file('image')) {
+                $file = $request->file('image');
                 if ($file && $file->isValid()) {
                     $destinationPath = public_path('images');
                     if (!file_exists($destinationPath)) {
                         @mkdir($destinationPath, 0777, true);
                     }
 
-                    // 安全清空旧的本地文件
-                    if ($user->image_path) {
-                        $parsedPath = parse_url($user->image_path, PHP_URL_PATH);
-                        if ($parsedPath) {
-                            $oldFilename = basename($parsedPath);
-                            $oldFileLocal = public_path('images/' . $oldFilename);
-                            if (file_exists($oldFileLocal) && is_file($oldFileLocal)) {
-                                @unlink($oldFileLocal);
-                            }
-                        }
-                    }
-
                     $ext = $file->guessExtension() ?: $file->getClientOriginalExtension() ?: 'jpg';
                     $filename = time() . '_' . uniqid() . '.' . $ext;
                     $file->move($destinationPath, $filename);
 
-                    // 保存 API 代理图片地址
                     $data['image_path'] = url('api/images/' . $filename);
-                } else {
-                    return response()->json([
-                        'message' => 'The uploaded file is corrupt or exceeds the server limit.'
-                    ], 422);
                 }
             }
 
-            // 更新用户数据库记录
+            // 强行更新数据库
             $user->update($data);
             $freshUser = $user->fresh();
 
@@ -121,7 +141,7 @@ class ProfileController extends Controller
     }
 
     /**
-     * API 代理读取并返回图片文件 (自动附加 CORS 头)
+     * API 代理读取并返回图片文件
      */
     public function serveImage($filename)
     {

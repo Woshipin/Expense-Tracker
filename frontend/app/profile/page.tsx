@@ -34,9 +34,9 @@ const getInitials = (name: string) => {
   return name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2);
 };
 
-// 【核心新增】：Canvas 智能图片压缩算法 (将大图无损压缩至 1024px，150KB 左右)
-const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.85): Promise<File> => {
-  return new Promise((resolve) => {
+// 【核心新增】：将图片文件转为高质量 Base64 编码字符串
+const fileToBase64 = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 0.85): Promise<string> => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
@@ -64,25 +64,12 @@ const compressImage = (file: File, maxWidth = 1024, maxHeight = 1024, quality = 
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
 
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
-                type: "image/jpeg",
-                lastModified: Date.now(),
-              });
-              resolve(compressedFile);
-            } else {
-              resolve(file);
-            }
-          },
-          "image/jpeg",
-          quality
-        );
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
       };
-      img.onerror = () => resolve(file);
+      img.onerror = (err) => reject(err);
     };
-    reader.onerror = () => resolve(file);
+    reader.onerror = (err) => reject(err);
   });
 };
 
@@ -105,7 +92,8 @@ export default function ProfilePage() {
   // 表单状态
   const [profileForm, setProfileForm] = useState({ full_name: "", email: "" });
   const [passwordForm, setPasswordForm] = useState({ current_password: "", new_password: "", new_password_confirmation: "" });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [imagePreviewState, setImagePreviewState] = useState<string | null>(null); 
   const [errors, setErrors] = useState<any>({});
 
@@ -115,7 +103,7 @@ export default function ProfilePage() {
   };
 
   /**
-   * 拼接动态主机或反向代理域名 (带防缓存时间戳)
+   * 拼接动态主机地址
    */
   const getDisplayImageUrl = (path: string | null) => {
     if (!path) return null;
@@ -161,7 +149,7 @@ export default function ProfilePage() {
 
   const openEditModal = () => {
     setErrors({});
-    setSelectedFile(null);
+    setImageBase64(null);
     setImagePreviewState(getDisplayImageUrl(user?.image_path) || null);
     setProfileForm({ full_name: user?.full_name || "", email: user?.email || "" });
     setIsEditProfile(true);
@@ -176,15 +164,18 @@ export default function ProfilePage() {
     setIsChangePassword(true);
   };
 
-  // 选择图片时自动在前端进行高清无损压缩
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const rawFile = e.target.files[0];
       setImagePreviewState(URL.createObjectURL(rawFile));
       
-      // 自动压缩超大照片
-      const compressed = await compressImage(rawFile);
-      setSelectedFile(compressed);
+      try {
+        // 生成 100% 稳定的 Base64 编码字符串
+        const base64 = await fileToBase64(rawFile);
+        setImageBase64(base64);
+      } catch (err) {
+        console.error("Base64 conversion error", err);
+      }
     }
   };
 
@@ -192,15 +183,18 @@ export default function ProfilePage() {
     setIsSaving(true);
     setErrors({});
     
-    const data = new FormData();
-    data.append('full_name', profileForm.full_name);
-    data.append('email', profileForm.email);
-    if (selectedFile) {
-      data.append('image', selectedFile, selectedFile.name);
+    // 【核心提交】：采用标准 JSON 负载提交 Base64，100% 确保字段写入 DB 数据库
+    const payload: any = {
+      full_name: profileForm.full_name,
+      email: profileForm.email,
+    };
+
+    if (imageBase64) {
+      payload.image_base64 = imageBase64;
     }
 
     try {
-      const response = await api.post('/profile', data);
+      const response = await api.post('/profile', payload);
 
       const updatedUser = response.data.user;
       setUser(updatedUser); 
