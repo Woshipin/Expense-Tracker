@@ -91,6 +91,12 @@ class AuthController extends Controller
     {
         $frontendUrl = rtrim(env('FRONTEND_URL', 'https://expense-tracker-six-zeta-43.vercel.app'), '/');
 
+        // 🌟 防线 1：拦截 Facebook 官方爬虫，防止它提前把 Code 消耗掉
+        $userAgent = request()->header('User-Agent', '');
+        if (str_contains(strtolower($userAgent), 'facebookexternalhit')) {
+            return response('OK', 200);
+        }
+
         try {
             // 1. 获取第三方用户信息
             $socialUser = Socialite::driver($provider)->stateless()->user();
@@ -117,20 +123,28 @@ class AuthController extends Controller
                 return redirect()->away("{$frontendUrl}/login?error=account_banned");
             }
 
-            // 5. 🌟 双重保险签发 JWT Token
+            // 5. 签发 JWT Token
             $token = auth('api')->login($user);
             if (!$token) {
-                // 如果 auth('api') 没签发出来，使用 JWTAuth Facade 强行签发
                 $token = \PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth::fromUser($user);
             }
 
-            // 6. 重定向回 Vercel 前端并带上 Token
+            // 6. 重定向回 Vercel 前端
             return redirect()->away("{$frontendUrl}/login?token={$token}");
 
         } catch (\Exception $e) {
-            // 🌟 核心突破：将真实的报错写入日志，并将报错信息编码后带给前端！
-            Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage() . "\n" . $e->getTraceAsString());
-            
+            Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage());
+
+            // 🌟 防线 2（终极救援）：如果 Code 还是被意外消耗了，直接去 DB 读取刚才救进去的用户放行登录！
+            if (str_contains($e->getMessage(), 'code has been used')) {
+                $recentUser = User::where('provider', $provider)->latest('updated_at')->first();
+                if ($recentUser && $recentUser->status !== User::STATUS_INACTIVE) {
+                    $token = auth('api')->login($recentUser);
+                    return redirect()->away("{$frontendUrl}/login?token={$token}");
+                }
+            }
+
+            // 其他失败情况
             $errorMessage = urlencode($e->getMessage());
             return redirect()->away("{$frontendUrl}/login?error={$errorMessage}");
         }
