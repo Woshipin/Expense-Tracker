@@ -112,18 +112,21 @@ export default function LoginPage() {
       return;
     }
 
-    // 4. 只有在明确收到 error 参数，且绝对没有 token 的情况下，才弹报错
+    // 4. 动态捕获并弹出后端的真实报错内容
     const error = searchParams.get("error");
-    if (error === "social_auth_failed") {
-      setToast({
-        message: "Social login failed or cancelled. (第三方登录被取消)",
-        type: "error",
-      });
-    } else if (error === "account_banned") {
-      setToast({
-        message: "Your account has been banned. (您的账号已被封禁)",
-        type: "error",
-      });
+    if (error) {
+      if (error === "account_banned") {
+        setToast({
+          message: "Your account has been banned. (您的账号已被封禁)",
+          type: "error",
+        });
+      } else {
+        // 🌟 解码并弹出真实的后端错误，不再死板地显示“第三方登录被取消”
+        setToast({
+          message: decodeURIComponent(error),
+          type: "error",
+        });
+      }
     }
   }, [searchParams]);
 

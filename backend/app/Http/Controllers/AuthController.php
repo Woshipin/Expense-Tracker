@@ -89,31 +89,19 @@ class AuthController extends Controller
 
     public function handleProviderCallback($provider)
     {
-        try {
-            // 1. 尝试获取第三方用户信息（加入 Facebook 容错处理）
-            $socialUser = null;
-            if ($provider === 'facebook') {
-                try {
-                    $socialUser = Socialite::driver('facebook')->stateless()->user();
-                } catch (\Exception $fbEx) {
-                    // 如果 Facebook Graph API 报权限错误，降级只获取基础公开信息
-                    Log::warning("Facebook Graph API Notice: " . $fbEx->getMessage());
-                    $socialUser = Socialite::driver('facebook')
-                        ->fields(['name', 'email'])
-                        ->stateless()
-                        ->user();
-                }
-            } else {
-                $socialUser = Socialite::driver($provider)->stateless()->user();
-            }
+        $frontendUrl = rtrim(env('FRONTEND_URL', 'https://expense-tracker-six-zeta-43.vercel.app'), '/');
 
-            // 2. 提取信息并做安全防护
+        try {
+            // 1. 获取第三方用户信息
+            $socialUser = Socialite::driver($provider)->stateless()->user();
+
+            // 2. 提取并清洗数据
             $email = $socialUser->getEmail() ?: "fb_{$socialUser->getId()}@facebook.com";
             $name = $socialUser->getName() ?: 'Facebook User';
             $rawAvatar = $socialUser->getAvatar();
             $safeAvatar = $rawAvatar ? substr($rawAvatar, 0, 255) : null;
 
-            // 3. 🌟 原子化操作：查找或更新/创建用户，避免重复插入主键冲突
+            // 3. 数据库原子化更新或创建
             $user = User::updateOrCreate(
                 ['email' => $email],
                 [
@@ -126,21 +114,25 @@ class AuthController extends Controller
 
             // 4. 检查账号状态
             if ($user->status === User::STATUS_INACTIVE) {
-                $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
                 return redirect()->away("{$frontendUrl}/login?error=account_banned");
             }
 
-            // 5. 🌟 强制签发 JWT Token
+            // 5. 🌟 双重保险签发 JWT Token
             $token = auth('api')->login($user);
+            if (!$token) {
+                // 如果 auth('api') 没签发出来，使用 JWTAuth Facade 强行签发
+                $token = \PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth::fromUser($user);
+            }
 
-            // 6. 安全重定向回 Vercel 前端
-            $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
+            // 6. 重定向回 Vercel 前端并带上 Token
             return redirect()->away("{$frontendUrl}/login?token={$token}");
 
         } catch (\Exception $e) {
-            Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage());
-            $frontendUrl = rtrim(env('FRONTEND_URL', 'http://localhost:3000'), '/');
-            return redirect()->away("{$frontendUrl}/login?error=social_auth_failed");
+            // 🌟 核心突破：将真实的报错写入日志，并将报错信息编码后带给前端！
+            Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            
+            $errorMessage = urlencode($e->getMessage());
+            return redirect()->away("{$frontendUrl}/login?error={$errorMessage}");
         }
     }
 
