@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart'; 
-import 'package:google_sign_in/google_sign_in.dart'; // [新增] Google 原生登录 SDK
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; // [新增] FB 原生登录 SDK
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_facebook_auth/flutter_facebook_auth.dart'; 
 
 import '../../core/api/api_client.dart';
 import '../../core/constants/colors.dart';
@@ -113,6 +113,8 @@ class _LoginViewState extends State<LoginView> {
   @override
   void initState() {
     super.initState();
+    // 🌟 1. 进入页面时静默触发雷达探测，自动锁定 Render 线上 API
+    ApiClient().findWorkingUrl();
     _loadSavedCredentials();
   }
 
@@ -131,7 +133,7 @@ class _LoginViewState extends State<LoginView> {
   }
 
   // =====================================================================
-  // 🚀 【完全重构：原生移动端第三方登录 API 逻辑】
+  // 🚀 【原生移动端第三方登录 API 逻辑】
   // =====================================================================
   Future<void> _handleSocialLogin(String provider) async {
     setState(() => _isLoading = true);
@@ -145,7 +147,6 @@ class _LoginViewState extends State<LoginView> {
         final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
         
         if (googleUser == null) {
-          // 用户手动取消了登录窗口
           setState(() => _isLoading = false);
           return;
         }
@@ -157,16 +158,14 @@ class _LoginViewState extends State<LoginView> {
         final LoginResult result = await FacebookAuth.instance.login();
         
         if (result.status == LoginStatus.success) {
-          // 💡 修复：新版 flutter_facebook_auth 使用 tokenString 获取 token 字符串
           providerToken = result.accessToken?.tokenString;
         } else {
-          // 用户取消授权或异常
           setState(() => _isLoading = false);
           return;
         }
       }
 
-      // 2. 将原生拿到的 Token 发送给 Laravel API (`/auth/{provider}/app`) 进行验证
+      // 2. 将原生拿到的 Token 发送给 Render 上的 Laravel API (`/auth/{provider}/app`) 进行验证
       if (providerToken != null) {
         final response = await ApiClient().dio.post(
           "/auth/${provider.toLowerCase()}/app", 
@@ -175,7 +174,7 @@ class _LoginViewState extends State<LoginView> {
           },
         );
 
-        // 3. 登录成功，从后端获取属于系统的 JWT Token，保存并跳转至原生 Dashboard
+        // 3. 登录成功，获取属于系统的 JWT Token 存入本地并跳转至 App 首页
         if (response.data != null && response.data['access_token'] != null) {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString("auth_token", response.data['access_token']);

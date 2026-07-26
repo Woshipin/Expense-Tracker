@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/api_client.dart';
 import '../../core/constants/colors.dart';
 import '../../core/widgets/toast.dart';
+import '../categories/category_view.dart';
 import '../shared/crud_helpers.dart';
 
 class PaymentMethodsView extends StatefulWidget {
@@ -22,6 +23,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
   ];
 
   final _search = DebouncedSearchController();
+  List<TypeItem> _types = [];
   List<JsonMap> _methods = [];
   bool _loading = true;
   String _status = 'all';
@@ -31,7 +33,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _loadData();
   }
 
   @override
@@ -40,17 +42,33 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  // 动态从 DB 加载 Types 和 Payment Methods
+  Future<void> _loadData() async {
     setState(() => _loading = true);
     try {
+      // 1. 获取 active 状态的 Types
+      final typesRes = await ApiClient().dio.get('/types', queryParameters: {'status': '1'});
+      final dynamic rawTypesPayload = typesRes.data;
+      final List<dynamic> rawTypes = rawTypesPayload is Map<String, dynamic>
+          ? (rawTypesPayload['data'] as List<dynamic>? ?? [])
+          : (rawTypesPayload as List<dynamic>? ?? []);
+      final types = rawTypes.map((t) => TypeItem.fromJson(Map<String, dynamic>.from(t))).toList();
+
+      // 2. 获取 Payment Methods
       final result = await fetchPaged('/payment-methods', page: _page, params: {
         if (_search.controller.text.trim().isNotEmpty) 'search': _search.controller.text.trim(),
         if (_status != 'all') 'status': _status,
       });
+      
       var items = result.items;
       if (_status != 'all') items = items.where((m) => fieldText(m, 'status') == _status).toList();
+      
       if (!mounted) return;
-      setState(() { _methods = items; _pages = result.totalPages; });
+      setState(() { 
+        _types = types;
+        _methods = items; 
+        _pages = result.totalPages; 
+      });
     } on DioException catch (e) {
       if (mounted) showApiError(context, e, 'Failed to fetch payment methods.');
     } finally {
@@ -62,7 +80,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
     final form = await showDialog<_MethodFormData>(
       context: context, 
       barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
-      builder: (_) => MethodFormDialog(editing: editing, icons: icons, colors: colors),
+      builder: (_) => MethodFormDialog(editing: editing, typesList: _types, icons: icons, colors: colors),
     );
     if (form == null) return;
     try {
@@ -73,7 +91,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
         await ApiClient().dio.put('/payment-methods/${editing['id']}', data: form.toJson());
         if (mounted) SunsetToast.show(context, 'Payment method updated successfully!');
       }
-      _load();
+      _loadData();
     } on DioException catch (e) {
       if (mounted) showApiError(context, e, 'Operation failed.');
     }
@@ -87,7 +105,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
     try {
       await ApiClient().dio.delete('/payment-methods/${item['id']}');
       if (mounted) SunsetToast.show(context, 'Payment method deleted successfully');
-      _load();
+      _loadData();
     } on DioException catch (e) {
       if (mounted) showApiError(context, e, 'Failed to delete payment method');
     }
@@ -95,6 +113,10 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
 
   void _view(JsonMap item) {
     final color = colorFromHex(fieldText(item, 'color', '#3b82f6'), const Color(0xFF3B82F6));
+    final typeId = fieldInt(item, 'type_id', 1);
+    final typeName = _types.firstWhere((t) => t.id == typeId, orElse: () => TypeItem(id: typeId, name: typeId == 2 ? 'Income' : 'Expense', status: 1)).name;
+    final isActive = fieldInt(item, 'status', 1) == 1;
+
     showDialog<void>(
       context: context,
       barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
@@ -125,7 +147,27 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
                       const SizedBox(height: 16),
                       Text(fieldText(item, 'name'), textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                       const SizedBox(height: 8),
-                      Chip(label: Text(fieldInt(item, 'type_id', 1) == 2 ? 'Income' : 'Expense'), backgroundColor: const Color(0xFFFFF7ED), labelStyle: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.w900), side: BorderSide.none),
+
+                      // 🌟 同时显示 Type 和 Status
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Chip(
+                            label: Text(typeName), 
+                            backgroundColor: const Color(0xFFFFF7ED), 
+                            labelStyle: const TextStyle(color: SunsetColors.primary, fontWeight: FontWeight.w900, fontSize: 12), 
+                            side: BorderSide.none
+                          ),
+                          const SizedBox(width: 8),
+                          Chip(
+                            label: Text(isActive ? 'Active' : 'Inactive'), 
+                            backgroundColor: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2), 
+                            labelStyle: TextStyle(color: isActive ? const Color(0xFF059669) : Colors.red, fontWeight: FontWeight.w900, fontSize: 12), 
+                            side: BorderSide(color: isActive ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA))
+                          ),
+                        ],
+                      ),
+
                       const SizedBox(height: 12),
                       Text(fieldText(item, 'description', 'No description provided.'), textAlign: TextAlign.center),
                     ],
@@ -149,7 +191,6 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
     );
   }
 
-  // 🌟 核心修复：完全响应式的过滤条
   Widget _buildResponsiveToolbar() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -165,7 +206,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
           
           final searchField = TextField(
             controller: _search.controller, 
-            onChanged: (_) => _search.onChanged(() { _page = 1; _load(); }), 
+            onChanged: (_) => _search.onChanged(() { _page = 1; _loadData(); }), 
             decoration: sunsetFieldDecoration('Search payment methods...', icon: Icons.search)
           );
 
@@ -177,7 +218,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
               DropdownMenuItem(value: '1', child: Text('Active')), 
               DropdownMenuItem(value: '0', child: Text('Inactive'))
             ],
-            onChanged: (value) { if (value == null) return; setState(() { _status = value; _page = 1; }); _load(); },
+            onChanged: (value) { if (value == null) return; setState(() { _status = value; _page = 1; }); _loadData(); },
           );
 
           if (isMobile) {
@@ -204,24 +245,79 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
 
   @override
   Widget build(BuildContext context) {
-    final income = _methods.where((m) => fieldInt(m, 'type_id', 1) == 2).toList();
-    final expense = _methods.where((m) => fieldInt(m, 'type_id', 1) == 1).toList();
-
     return PageScaffold(
       title: 'Payment Methods',
       subtitle: 'Manage system payment channels and their availability.',
       action: PrimaryActionButton(label: 'Add Method', icon: Icons.add, onPressed: () => _save()),
       children: [
-        _buildResponsiveToolbar(), // 使用响应式组件替代旧的 ToolbarBox
+        _buildResponsiveToolbar(),
         const SizedBox(height: 22),
-        if (_loading) const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator(color: SunsetColors.primary)))
+        if (_loading) 
+          const Center(child: Padding(padding: EdgeInsets.all(48), child: CircularProgressIndicator(color: SunsetColors.primary)))
         else ...[
+          if (_types.isEmpty) _buildNoTypesWarningCard(),
+          _buildGroupedSections(),
+        ],
+        PaginationBar(currentPage: _page, totalPages: _pages, onPage: (page) { setState(() => _page = page); _loadData(); }),
+      ],
+    );
+  }
+
+  Widget _buildNoTypesWarningCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 28),
+          SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("No Payment Types Found", style: TextStyle(color: SunsetColors.dark, fontWeight: FontWeight.bold, fontSize: 15)),
+                SizedBox(height: 2),
+                Text("You haven't configured any active transaction types in database yet.", style: TextStyle(color: Colors.black54, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 动态多栏分组
+  Widget _buildGroupedSections() {
+    if (_types.isEmpty) {
+      final income = _methods.where((m) => fieldInt(m, 'type_id', 1) == 2).toList();
+      final expense = _methods.where((m) => fieldInt(m, 'type_id', 1) == 1).toList();
+
+      return Column(
+        children: [
           _section('Income', income, const Color(0xFF059669)),
           const SizedBox(height: 28),
           _section('Expense', expense, SunsetColors.expense),
         ],
-        PaginationBar(currentPage: _page, totalPages: _pages, onPage: (page) { setState(() => _page = page); _load(); }),
-      ],
+      );
+    }
+
+    return Column(
+      children: _types.map((typeObj) {
+        final isIncome = typeObj.name.toLowerCase().contains('income');
+        final titleColor = isIncome ? const Color(0xFF059669) : SunsetColors.expense;
+        final items = _methods.where((m) => fieldInt(m, 'type_id', 1) == typeObj.id).toList();
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 28.0),
+          child: _section(typeObj.name, items, titleColor),
+        );
+      }).toList(),
     );
   }
 
@@ -238,7 +334,7 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
           Container(
             width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 28),
             decoration: BoxDecoration(color: const Color(0x80F8FAFC), borderRadius: BorderRadius.circular(18), border: Border.all(color: Colors.grey.shade200)),
-            child: Text('No ${title.toLowerCase()} methods.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w800)),
+            child: Text('No ${title.toLowerCase()} channels.', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w800)),
           )
         else
           LayoutBuilder(builder: (context, constraints) {
@@ -253,8 +349,11 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
     );
   }
 
+  // 卡片带有 Status 胶囊标签
   Widget _card(JsonMap item) {
     final color = colorFromHex(fieldText(item, 'color', '#3b82f6'), const Color(0xFF3B82F6));
+    final isActive = fieldInt(item, 'status', 1) == 1;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade100)),
@@ -265,7 +364,35 @@ class _PaymentMethodsViewState extends State<PaymentMethodsView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(fieldText(item, 'name'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SunsetColors.dark, fontSize: 16, fontWeight: FontWeight.w900)),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      fieldText(item, 'name'), 
+                      maxLines: 1, 
+                      overflow: TextOverflow.ellipsis, 
+                      style: const TextStyle(color: SunsetColors.dark, fontSize: 16, fontWeight: FontWeight.w900)
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: isActive ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA)),
+                    ),
+                    child: Text(
+                      isActive ? 'Active' : 'Inactive',
+                      style: TextStyle(
+                        color: isActive ? const Color(0xFF059669) : Colors.red,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 4),
               Text(fieldText(item, 'description', 'No description'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0x662D2520), fontSize: 12, fontWeight: FontWeight.w700)),
             ],
@@ -284,8 +411,8 @@ class _MethodFormData {
 }
 
 class MethodFormDialog extends StatefulWidget {
-  final JsonMap? editing; final List<String> icons; final List<Color> colors;
-  const MethodFormDialog({super.key, this.editing, required this.icons, required this.colors});
+  final JsonMap? editing; final List<TypeItem> typesList; final List<String> icons; final List<Color> colors;
+  const MethodFormDialog({super.key, this.editing, required this.typesList, required this.icons, required this.colors});
   @override
   State<MethodFormDialog> createState() => _MethodFormDialogState();
 }
@@ -299,7 +426,9 @@ class _MethodFormDialogState extends State<MethodFormDialog> {
     final item = widget.editing ?? {};
     _name = TextEditingController(text: fieldText(item, 'name'));
     _description = TextEditingController(text: fieldText(item, 'description'));
-    _typeId = fieldInt(item, 'type_id', 1);
+    
+    final defaultType = widget.typesList.isNotEmpty ? widget.typesList.first.id : 1;
+    _typeId = fieldInt(item, 'type_id', defaultType);
     _icon = fieldText(item, 'icon', 'CreditCard');
     _color = colorFromHex(fieldText(item, 'color', '#3b82f6'), const Color(0xFF3B82F6));
     _status = fieldInt(item, 'status', 1);
@@ -339,11 +468,28 @@ class _MethodFormDialogState extends State<MethodFormDialog> {
                   children: [
                     TextField(controller: _name, decoration: sunsetFieldDecoration('Method Name')),
                     const SizedBox(height: 14),
-                    DropdownButtonFormField<int>(
-                      initialValue: _typeId, decoration: sunsetFieldDecoration('Type'),
-                      items: const [DropdownMenuItem(value: 1, child: Text('Expense')), DropdownMenuItem(value: 2, child: Text('Income'))],
-                      onChanged: (value) => setState(() => _typeId = value ?? 1),
-                    ),
+
+                    // 🌟 无 Type 预警框
+                    if (widget.typesList.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                            SizedBox(width: 8),
+                            Expanded(child: Text("No Type available. Please add a Type first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
+                          ],
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        initialValue: _typeId, 
+                        decoration: sunsetFieldDecoration('Type'),
+                        items: widget.typesList.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))).toList(),
+                        onChanged: (value) => setState(() => _typeId = value ?? 1),
+                      ),
+
                     const SizedBox(height: 14),
                     Wrap(
                       spacing: 8, runSpacing: 8,
@@ -392,7 +538,7 @@ class _MethodFormDialogState extends State<MethodFormDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: () {
+                      onPressed: widget.typesList.isEmpty ? null : () {
                         if (_name.text.trim().isEmpty) return;
                         Navigator.pop(context, _MethodFormData(name: _name.text.trim(), typeId: _typeId, icon: _icon, color: _color, description: _description.text.trim(), status: _status));
                       },

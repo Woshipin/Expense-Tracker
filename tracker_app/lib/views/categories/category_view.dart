@@ -1,5 +1,4 @@
 import 'dart:async';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
@@ -31,6 +30,7 @@ class _CategoryViewState extends State<CategoryView> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
 
+  List<TypeItem> _types = [];
   List<CategoryItem> _categories = [];
   bool _isLoading = true;
   String _filterStatus = 'all';
@@ -40,7 +40,7 @@ class _CategoryViewState extends State<CategoryView> {
   @override
   void initState() {
     super.initState();
-    _fetchCategories();
+    _fetchData();
   }
 
   @override
@@ -50,10 +50,21 @@ class _CategoryViewState extends State<CategoryView> {
     super.dispose();
   }
 
-  Future<void> _fetchCategories() async {
+  // 动态获取 DB 中的 Active Types 以及属于当前 User 的 Categories
+  Future<void> _fetchData() async {
     setState(() => _isLoading = true);
 
     try {
+      // 1. 获取数据库中 active 状态的 Types
+      final typesRes = await ApiClient().dio.get('/types', queryParameters: {'status': '1'});
+      final dynamic rawTypesPayload = typesRes.data;
+      final List<dynamic> rawTypes = rawTypesPayload is Map<String, dynamic>
+          ? (rawTypesPayload['data'] as List<dynamic>? ?? [])
+          : (rawTypesPayload as List<dynamic>? ?? []);
+      
+      final fetchedTypes = rawTypes.map((t) => TypeItem.fromJson(Map<String, dynamic>.from(t))).toList();
+
+      // 2. 获取当前用户的 Categories
       final response = await ApiClient().dio.get(
         '/categories',
         queryParameters: {
@@ -68,7 +79,10 @@ class _CategoryViewState extends State<CategoryView> {
           ? (payload['data'] as List<dynamic>? ?? [])
           : (payload as List<dynamic>? ?? []);
 
+      if (!mounted) return;
+
       setState(() {
+        _types = fetchedTypes;
         _categories = rawItems.map((item) => CategoryItem.fromJson(Map<String, dynamic>.from(item))).toList();
         _totalPages = payload is Map<String, dynamic> ? int.tryParse('${payload['last_page'] ?? 1}') ?? 1 : 1;
       });
@@ -85,7 +99,7 @@ class _CategoryViewState extends State<CategoryView> {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 500), () {
       setState(() => _currentPage = 1);
-      _fetchCategories();
+      _fetchData();
     });
   }
 
@@ -98,7 +112,7 @@ class _CategoryViewState extends State<CategoryView> {
         await ApiClient().dio.put('/categories/${editing.id}', data: form.toJson());
         if (mounted) SunsetToast.show(context, 'Category updated successfully!');
       }
-      await _fetchCategories();
+      await _fetchData();
     } on DioException catch (e) {
       final message = e.response?.data is Map ? (e.response?.data['message'] ?? e.response?.data['error']) : null;
       if (mounted) {
@@ -112,7 +126,7 @@ class _CategoryViewState extends State<CategoryView> {
     try {
       await ApiClient().dio.delete('/categories/${category.id}');
       if (mounted) SunsetToast.show(context, 'Category deleted successfully');
-      await _fetchCategories();
+      await _fetchData();
     } on DioException catch (e) {
       final message = e.response?.data is Map ? (e.response?.data['message'] ?? e.response?.data['error']) : null;
       if (mounted) {
@@ -120,9 +134,6 @@ class _CategoryViewState extends State<CategoryView> {
       }
     }
   }
-
-  List<CategoryItem> get _incomeCategories => _categories.where((c) => c.typeId == 2).toList();
-  List<CategoryItem> get _expenseCategories => _categories.where((c) => c.typeId == 1).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -133,35 +144,25 @@ class _CategoryViewState extends State<CategoryView> {
           builder: (context, constraints) {
             final isWide = constraints.maxWidth >= 900;
             return SingleChildScrollView(
-                clipBehavior: Clip.none,
-                padding: EdgeInsets.fromLTRB(isWide ? 32 : 18, 24, isWide ? 32 : 18, 32),
-                child: Column(
+              clipBehavior: Clip.none,
+              padding: EdgeInsets.fromLTRB(isWide ? 32 : 18, 24, isWide ? 32 : 18, 32),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildHeader(isWide),
                   const SizedBox(height: 20),
-                  _buildResponsiveToolbar(), // 🌟 核心修复：调用全新的响应式工具栏
+                  _buildResponsiveToolbar(),
                   const SizedBox(height: 24),
+
                   if (_isLoading)
                     _buildLoading()
                   else ...[
-                    _buildCategorySection(
-                      title: 'Income',
-                      titleColor: const Color(0xFF059669),
-                      badgeColor: const Color(0xFFECFDF5),
-                      categories: _incomeCategories,
-                      emptyText: 'No income categories.',
-                      columns: isWide ? 2 : 1,
-                    ),
-                    const SizedBox(height: 28),
-                    _buildCategorySection(
-                      title: 'Expense',
-                      titleColor: SunsetColors.expense,
-                      badgeColor: const Color(0xFFFEF2F2),
-                      categories: _expenseCategories,
-                      emptyText: 'No expense categories.',
-                      columns: isWide ? 2 : 1,
-                    ),
+                    // 全局无 Type 提示卡片
+                    if (_types.isEmpty) _buildNoTypesWarningCard(),
+
+                    // 根据 DB 中的 Types 动态渲染列表
+                    _buildGroupedSections(isWide),
+
                     if (_totalPages > 1) ...[
                       const SizedBox(height: 24),
                       _buildPagination(),
@@ -209,7 +210,35 @@ class _CategoryViewState extends State<CategoryView> {
     );
   }
 
-  // 🌟 核心修复：严格控制 Row 和 Column 布局，防止边框被挤压裁切
+  Widget _buildNoTypesWarningCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.only(bottom: 24),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 28),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("No Category Types Found", style: TextStyle(color: SunsetColors.dark, fontWeight: FontWeight.bold, fontSize: 15)),
+                SizedBox(height: 2),
+                Text("You haven't configured any active transaction types in database yet.", style: TextStyle(color: Colors.black54, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildResponsiveToolbar() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -258,7 +287,7 @@ class _CategoryViewState extends State<CategoryView> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.30)),
+          borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.80)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -277,7 +306,7 @@ class _CategoryViewState extends State<CategoryView> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.30)),
+          borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.80)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -296,7 +325,7 @@ class _CategoryViewState extends State<CategoryView> {
           _filterStatus = value;
           _currentPage = 1;
         });
-        _fetchCategories();
+        _fetchData();
       },
     );
   }
@@ -307,6 +336,54 @@ class _CategoryViewState extends State<CategoryView> {
       alignment: Alignment.center,
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.black.withValues(alpha: 0.06))),
       child: const CircularProgressIndicator(color: SunsetColors.primary),
+    );
+  }
+
+  // 根据 DB 从 Types 动态渲染列表
+  Widget _buildGroupedSections(bool isWide) {
+    if (_types.isEmpty) {
+      return Column(
+        children: [
+          _buildCategorySection(
+            title: 'Income',
+            titleColor: const Color(0xFF059669),
+            badgeColor: const Color(0xFFECFDF5),
+            categories: _categories.where((c) => c.typeId == 2).toList(),
+            emptyText: 'No income categories.',
+            columns: isWide ? 2 : 1,
+          ),
+          const SizedBox(height: 28),
+          _buildCategorySection(
+            title: 'Expense',
+            titleColor: SunsetColors.expense,
+            badgeColor: const Color(0xFFFEF2F2),
+            categories: _categories.where((c) => c.typeId == 1).toList(),
+            emptyText: 'No expense categories.',
+            columns: isWide ? 2 : 1,
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: _types.map((typeObj) {
+        final isIncome = typeObj.name.toLowerCase().contains('income');
+        final titleColor = isIncome ? const Color(0xFF059669) : SunsetColors.expense;
+        final badgeColor = isIncome ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2);
+        final items = _categories.where((c) => c.typeId == typeObj.id).toList();
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 28.0),
+          child: _buildCategorySection(
+            title: typeObj.name,
+            titleColor: titleColor,
+            badgeColor: badgeColor,
+            categories: items,
+            emptyText: 'No ${typeObj.name.toLowerCase()} categories.',
+            columns: isWide ? 2 : 1,
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -357,8 +434,11 @@ class _CategoryViewState extends State<CategoryView> {
     );
   }
 
+  // 🌟 卡片内新增 Status (Active/Inactive) 响应式标签
   Widget _buildCategoryCard(CategoryItem category) {
     final color = category.color;
+    final isActive = category.status == 1;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -381,7 +461,36 @@ class _CategoryViewState extends State<CategoryView> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SunsetColors.dark, fontSize: 16, fontWeight: FontWeight.w900)),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        category.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: SunsetColors.dark, fontSize: 16, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    // Status Badge 胶囊
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: isActive ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA)),
+                      ),
+                      child: Text(
+                        isActive ? 'Active' : 'Inactive',
+                        style: TextStyle(
+                          color: isActive ? const Color(0xFF059669) : Colors.red,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 4),
                 Text(category.description.isEmpty ? 'No description' : category.description, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0x662D2520), fontSize: 12, fontWeight: FontWeight.w700)),
               ],
@@ -422,7 +531,7 @@ class _CategoryViewState extends State<CategoryView> {
             enabled: _currentPage > 1,
             onTap: () {
               setState(() => _currentPage--);
-              _fetchCategories();
+              _fetchData();
             },
           ),
           const SizedBox(width: 8),
@@ -434,7 +543,7 @@ class _CategoryViewState extends State<CategoryView> {
               child: InkWell(
                 onTap: () {
                   setState(() => _currentPage = page);
-                  _fetchCategories();
+                  _fetchData();
                 },
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
@@ -456,7 +565,7 @@ class _CategoryViewState extends State<CategoryView> {
             enabled: _currentPage < _totalPages,
             onTap: () {
               setState(() => _currentPage++);
-              _fetchCategories();
+              _fetchData();
             },
           ),
         ],
@@ -481,8 +590,14 @@ class _CategoryViewState extends State<CategoryView> {
     );
   }
 
-  void _openAddDialog() { _openFormDialog(CategoryFormData()); }
-  void _openEditDialog(CategoryItem category) { _openFormDialog(CategoryFormData.fromCategory(category), editing: category); }
+  void _openAddDialog() {
+    int defaultType = _types.isNotEmpty ? _types.first.id : 1;
+    _openFormDialog(CategoryFormData(typeId: defaultType)); 
+  }
+
+  void _openEditDialog(CategoryItem category) { 
+    _openFormDialog(CategoryFormData.fromCategory(category), editing: category); 
+  }
 
   Future<void> _openFormDialog(CategoryFormData initial, {CategoryItem? editing}) async {
     await showDialog<void>(
@@ -490,7 +605,7 @@ class _CategoryViewState extends State<CategoryView> {
       barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
       builder: (context) {
         return CategoryFormDialog(
-          initial: initial, editing: editing, availableIcons: _availableIcons,
+          initial: initial, editing: editing, typesList: _types, availableIcons: _availableIcons,
           availableColors: _availableColors, iconForName: _iconForName,
           onSave: (form) => _saveCategory(form, editing: editing),
         );
@@ -499,10 +614,11 @@ class _CategoryViewState extends State<CategoryView> {
   }
 
   void _openViewDialog(CategoryItem category) {
+    final typeName = _types.firstWhere((t) => t.id == category.typeId, orElse: () => TypeItem(id: category.typeId, name: category.typeId == 2 ? 'Income' : 'Expense', status: 1)).name;
     showDialog<void>(
       context: context,
       barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
-      builder: (context) => CategoryDetailsDialog(category: category, icon: _iconForName(category.icon)),
+      builder: (context) => CategoryDetailsDialog(category: category, typeName: typeName, icon: _iconForName(category.icon)),
     );
   }
 
@@ -537,11 +653,30 @@ class _CategoryViewState extends State<CategoryView> {
   }
 }
 
-class CategoryFormDialog extends StatefulWidget {
-  final CategoryFormData initial; final CategoryItem? editing; final List<String> availableIcons;
-  final List<Color> availableColors; final IconData Function(String name) iconForName; final Future<void> Function(CategoryFormData form) onSave;
+class TypeItem {
+  final int id;
+  final String name;
+  final int status;
+  TypeItem({required this.id, required this.name, required this.status});
 
-  const CategoryFormDialog({super.key, required this.initial, required this.editing, required this.availableIcons, required this.availableColors, required this.iconForName, required this.onSave});
+  factory TypeItem.fromJson(Map<String, dynamic> json) {
+    return TypeItem(
+      id: int.tryParse('${json['id'] ?? 0}') ?? 0,
+      name: '${json['name'] ?? ''}',
+      status: int.tryParse('${json['status'] ?? 1}') ?? 1,
+    );
+  }
+}
+
+class CategoryFormDialog extends StatefulWidget {
+  final CategoryFormData initial; final CategoryItem? editing; final List<TypeItem> typesList;
+  final List<String> availableIcons; final List<Color> availableColors; 
+  final IconData Function(String name) iconForName; final Future<void> Function(CategoryFormData form) onSave;
+
+  const CategoryFormDialog({
+    super.key, required this.initial, required this.editing, required this.typesList, 
+    required this.availableIcons, required this.availableColors, required this.iconForName, required this.onSave
+  });
 
   @override
   State<CategoryFormDialog> createState() => _CategoryFormDialogState();
@@ -563,6 +698,8 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
   void dispose() { _nameController.dispose(); _descriptionController.dispose(); super.dispose(); }
 
   Future<void> _handleSave() async {
+    if (widget.typesList.isEmpty) return;
+
     setState(() {
       _nameError = null;
       _form = _form.copy(name: _nameController.text.trim(), description: _descriptionController.text.trim());
@@ -614,11 +751,28 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
                     ],
                     const SizedBox(height: 18),
                     _label('Select Type'),
-                    DropdownButtonFormField<int>(
-                      initialValue: _form.typeId, decoration: _fieldDecoration('Select Type'),
-                      items: const [DropdownMenuItem(value: 1, child: Text('Expense')), DropdownMenuItem(value: 2, child: Text('Income'))],
-                      onChanged: (value) { if (value != null) setState(() => _form = _form.copy(typeId: value)); },
-                    ),
+
+                    // 🌟 无 Type 时的预警框提示 UI
+                    if (widget.typesList.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                            SizedBox(width: 8),
+                            Expanded(child: Text("No Type available. Please add a Type first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
+                          ],
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        initialValue: _form.typeId, 
+                        decoration: _fieldDecoration('Select Type'),
+                        items: widget.typesList.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))).toList(),
+                        onChanged: (value) { if (value != null) setState(() => _form = _form.copy(typeId: value)); },
+                      ),
+
                     const SizedBox(height: 18),
                     _label('Select Icon'),
                     Container(
@@ -689,7 +843,7 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _isSaving ? null : _handleSave,
+                      onPressed: (_isSaving || widget.typesList.isEmpty) ? null : _handleSave,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -755,7 +909,7 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
     return InputDecoration(
       hintText: hint, filled: true, fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.25))),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.80))),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5)),
     );
   }
@@ -766,11 +920,13 @@ class _CategoryFormDialogState extends State<CategoryFormDialog> {
 }
 
 class CategoryDetailsDialog extends StatelessWidget {
-  final CategoryItem category; final IconData icon;
-  const CategoryDetailsDialog({super.key, required this.category, required this.icon});
+  final CategoryItem category; final String typeName; final IconData icon;
+  const CategoryDetailsDialog({super.key, required this.category, required this.typeName, required this.icon});
 
   @override
   Widget build(BuildContext context) {
+    final isActive = category.status == 1;
+
     return Dialog(
       insetPadding: const EdgeInsets.all(18), backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -790,10 +946,36 @@ class CategoryDetailsDialog extends StatelessWidget {
                     const SizedBox(height: 18),
                     Text(category.name, textAlign: TextAlign.center, style: const TextStyle(color: SunsetColors.dark, fontSize: 22, fontWeight: FontWeight.w900)),
                     const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6), decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
-                      child: Text(category.typeId == 2 ? 'Income' : 'Expense', style: const TextStyle(color: SunsetColors.primary, fontSize: 12, fontWeight: FontWeight.w900)),
+
+                    // 🌟 同时显示 Type 标签 和 Status 标签
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10)),
+                          child: Text(typeName, style: const TextStyle(color: SunsetColors.primary, fontSize: 12, fontWeight: FontWeight.w900)),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isActive ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: isActive ? const Color(0xFFA7F3D0) : const Color(0xFFFECACA)),
+                          ),
+                          child: Text(
+                            isActive ? 'Active' : 'Inactive',
+                            style: TextStyle(
+                              color: isActive ? const Color(0xFF059669) : Colors.red,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
+
                     const SizedBox(height: 18),
                     Container(
                       width: double.infinity, padding: const EdgeInsets.all(16),

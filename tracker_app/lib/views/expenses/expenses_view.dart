@@ -8,7 +8,6 @@ import '../../core/widgets/toast.dart';
 import '../shared/crud_helpers.dart';
 
 class ExpenseListView extends StatefulWidget {
-  // 命名构造函数，与 main_layout 匹配
   const ExpenseListView.expenses({super.key});
 
   @override
@@ -67,18 +66,27 @@ class _ExpenseListViewState extends State<ExpenseListView> {
     }
   }
 
+  // 仅获取 status=1 & type_id=1 (Expense) 的分类和支付方式
   Future<void> _loadOptions() async {
     try {
       final responses = await Future.wait([
-        ApiClient().dio.get('/categories', queryParameters: {'status': 1}),
-        ApiClient().dio.get('/payment-methods', queryParameters: {'status': 1}),
+        ApiClient().dio.get('/categories', queryParameters: {'status': '1'}),
+        ApiClient().dio.get('/payment-methods', queryParameters: {'status': '1'}),
       ]);
       final cats = parsePaged(responses[0].data).items;
       final methods = parsePaged(responses[1].data).items;
+
       if (!mounted) return;
       setState(() {
-        _categories = cats.where((c) => fieldInt(c, 'status', 1) == 1 && fieldInt(c, 'type_id', 1) == typeId).toList();
-        _methods = methods.where((m) => fieldInt(m, 'status', 1) == 1 && fieldInt(m, 'type_id', 1) == typeId).toList();
+        _categories = cats.where((c) => 
+          fieldInt(c, 'status', 1) == 1 && 
+          (fieldInt(c, 'type_id', 1) == typeId || fieldText(c, 'type_name').toLowerCase().contains('expense'))
+        ).toList();
+
+        _methods = methods.where((m) => 
+          fieldInt(m, 'status', 1) == 1 && 
+          (fieldInt(m, 'type_id', 1) == typeId || fieldText(m, 'type_name').toLowerCase().contains('expense'))
+        ).toList();
       });
     } catch (_) {}
   }
@@ -216,7 +224,7 @@ class _ExpenseListViewState extends State<ExpenseListView> {
     );
   }
 
-  // ---------------- 智能响应式组件 ----------------
+  // 🌟 核心：所有过滤框统一为清晰常亮橙色边框
   InputDecoration _customFilterDecoration(String hint, {IconData? icon}) {
     return InputDecoration(
       hintText: hint,
@@ -228,11 +236,11 @@ class _ExpenseListViewState extends State<ExpenseListView> {
       isDense: true,
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10), 
-        borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.2), width: 1.5),
+        borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.80), width: 1.5),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5),
+        borderSide: const BorderSide(color: SunsetColors.primary, width: 2.0),
       ),
     );
   }
@@ -242,7 +250,7 @@ class _ExpenseListViewState extends State<ExpenseListView> {
   
   Widget _customDropdown(String value, String hint, List<JsonMap> options, ValueChanged<String> onChanged) {
     return DropdownButtonFormField<String>(
-      value: value,
+      initialValue: value,
       icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 20),
       decoration: _customFilterDecoration(hint),
       items: [
@@ -259,13 +267,12 @@ class _ExpenseListViewState extends State<ExpenseListView> {
       borderRadius: BorderRadius.circular(10),
       child: Container(
         padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10), border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.2), width: 1.5)),
+        decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(10), border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.80), width: 1.5)),
         child: Icon(icon, size: 22, color: SunsetColors.primary),
       ),
     );
   }
 
-  // ---------------- 构建页面主体 ----------------
   @override
   Widget build(BuildContext context) {
     final double width = MediaQuery.of(context).size.width;
@@ -276,7 +283,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
       subtitle: 'Detailed view of your outgoing transactions.',
       action: PrimaryActionButton(label: 'Add $singular', icon: Icons.add, onPressed: () => _save()),
       children: [
-        // 核心：所有视图全部包裹在这个统一的大卡片中
         Container(
           decoration: BoxDecoration(
             color: Colors.white, 
@@ -287,8 +293,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              
-              // 1. 动态过滤区
               Padding(
                 padding: EdgeInsets.all(isMobile ? 16.0 : 20.0),
                 child: width >= 1100 
@@ -296,7 +300,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
                   : (width >= 700 ? _buildTabletFilters() : _buildMobileFilters()),
               ),
               
-              // 2. 数据展示区
               if (_loading) 
                 const Padding(padding: EdgeInsets.all(48), child: Center(child: CircularProgressIndicator(color: SunsetColors.primary)))
               else if (_items.isEmpty) 
@@ -306,7 +309,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
                   ? Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: _tableContent()) 
                   : Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: _cardsContent()),
               
-              // 3. 翻页器
               if (_items.isNotEmpty)
                 _buildUnifiedPagination(),
             ],
@@ -316,7 +318,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
     );
   }
 
-  // ---- 3 种屏幕尺寸的过滤器排版 ----
   Widget _buildDesktopFilters() {
     return Row(
       children: [
@@ -372,7 +373,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
     );
   }
 
-  // ---- 表格视图 (Desktop) ----
   Widget _tableContent() {
     const double colTitle = 240; const double colDesc = 200; const double colPrice = 140;
     const double colDate = 110; const double colTime = 90; const double colMethod = 120;
@@ -442,7 +442,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
     );
   }
 
-  // ---- 卡片视图 (Tablet & Mobile) ----
   Widget _cardsContent() {
     return Column(
       children: _items.map((item) {
@@ -498,7 +497,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
     );
   }
 
-  // ---- 统底部分页器 ----
   Widget _buildUnifiedPagination() {
     return Container(
       margin: const EdgeInsets.only(top: 10),
@@ -576,6 +574,9 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasNoCategories = widget.categories.isEmpty;
+    final bool hasNoMethods = widget.methods.isEmpty;
+
     return AlertDialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -585,20 +586,53 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               TextField(controller: _title, decoration: sunsetFieldDecoration('Title')),
               const SizedBox(height: 14),
-              TextField(controller: _price, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.digitsOnly], decoration: sunsetFieldDecoration('Amount')),
+              TextField(controller: _price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: sunsetFieldDecoration('Amount (RM)')),
               const SizedBox(height: 14),
               TextField(controller: _date, readOnly: true, onTap: _selectDate, decoration: sunsetFieldDecoration('Date')),
               const SizedBox(height: 14),
               TextField(controller: _time, readOnly: true, onTap: _selectTime, decoration: sunsetFieldDecoration('Time')),
               const SizedBox(height: 14),
-              _dropdown(_categoryId, 'Category', widget.categories, (value) => setState(() => _categoryId = value)),
+
+              // 🌟 Category 下拉框空状态预警框
+              if (hasNoCategories)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                      SizedBox(width: 8),
+                      Expanded(child: Text("No Expense Category found. Please add a category first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
+                    ],
+                  ),
+                )
+              else
+                _dropdown(_categoryId, 'Category', widget.categories, (value) => setState(() => _categoryId = value)),
+
               const SizedBox(height: 14),
-              _dropdown(_methodId, 'Payment Method', widget.methods, (value) => setState(() => _methodId = value)),
+
+              // 🌟 Payment Method 下拉框空状态预警框
+              if (hasNoMethods)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                      SizedBox(width: 8),
+                      Expanded(child: Text("No Expense Payment Method found. Please add a method first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
+                    ],
+                  ),
+                )
+              else
+                _dropdown(_methodId, 'Payment Method', widget.methods, (value) => setState(() => _methodId = value)),
+
               const SizedBox(height: 14),
-              TextField(controller: _description, maxLines: 3, decoration: sunsetFieldDecoration('Description')),
+              TextField(controller: _description, maxLines: 3, decoration: sunsetFieldDecoration('Description (Optional)')),
             ],
           ),
         ),
@@ -606,7 +640,7 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
       actions: [
         OutlinedButton(onPressed: () => Navigator.pop(context), style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Cancel')),
         ElevatedButton(
-          onPressed: () {
+          onPressed: (hasNoCategories || hasNoMethods) ? null : () {
             if (_title.text.trim().isEmpty || _price.text.trim().isEmpty || _categoryId.isEmpty || _methodId.isEmpty) return;
             Navigator.pop(context, _ExpenseFormData(title: _title.text.trim(), description: _description.text.trim(), price: _price.text.trim(), date: _date.text.trim(), time: _time.text.trim(), paymentMethodId: _methodId, categoryId: _categoryId));
           },
@@ -619,7 +653,8 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
 
   Widget _dropdown(String value, String label, List<JsonMap> options, ValueChanged<String> onChanged) {
     return DropdownButtonFormField<String>(
-      initialValue: value.isEmpty ? null : value, decoration: sunsetFieldDecoration(label),
+      initialValue: value.isEmpty ? null : value, 
+      decoration: sunsetFieldDecoration(label),
       items: options.map((item) => DropdownMenuItem(value: '${item['id']}', child: Text(fieldText(item, 'name')))).toList(),
       onChanged: (value) { if (value != null) onChanged(value); },
     );

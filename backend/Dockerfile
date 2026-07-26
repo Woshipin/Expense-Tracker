@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     && docker-php-ext-install pdo pdo_mysql gd
 
-# 2. 开启 Apache 的 Rewrite 模块 (Laravel 路由必需)
+# 2. 开启 Apache 的 Rewrite 模块
 RUN a2enmod rewrite
 
 # 3. 复制后端代码到容器工作目录
@@ -33,5 +33,5 @@ RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cac
 # 7. 暴露 80 端口
 EXPOSE 80
 
-# 8. 🌟 标准 JSON 格式启动命令：先自动在 TiDB 建表，再启动 Apache 服务
-CMD ["sh", "-c", "php artisan migrate --force && apache2-foreground"]
+# 8. 🌟 启动命令：自动建表 -> 自动插入默认 Type 种子 -> 启动 Apache
+CMD ["sh", "-c", "php artisan migrate --force && php artisan db:seed --class=TypeSeeder --force && apache2-foreground"]
