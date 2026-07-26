@@ -133,20 +133,28 @@ class AuthController extends Controller
             return redirect()->away("{$frontendUrl}/login?token={$token}");
 
         } catch (\Exception $e) {
+
+            // 🌟 详细报错依然静默记录在 Render Logs 中，方便你随时排查
             Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage());
 
-            // 🌟 防线 2（终极救援）：如果 Code 还是被意外消耗了，直接去 DB 读取刚才救进去的用户放行登录！
-            if (str_contains($e->getMessage(), 'code has been used')) {
-                $recentUser = User::where('provider', $provider)->latest('updated_at')->first();
-                if ($recentUser && $recentUser->status !== User::STATUS_INACTIVE) {
-                    $token = auth('api')->login($recentUser);
-                    return redirect()->away("{$frontendUrl}/login?token={$token}");
-                }
-            }
+            // 给前端只传简洁的标识符
+            $frontendUrl = rtrim(env('FRONTEND_URL', 'https://expense-tracker-six-zeta-43.vercel.app'), '/');
+            return redirect()->away("{$frontendUrl}/login?error=social_auth_failed");
 
-            // 其他失败情况
-            $errorMessage = urlencode($e->getMessage());
-            return redirect()->away("{$frontendUrl}/login?error={$errorMessage}");
+            // Log::error("Web Social Auth Error ({$provider}): " . $e->getMessage());
+
+            // // 🌟 防线 2（终极救援）：如果 Code 还是被意外消耗了，直接去 DB 读取刚才救进去的用户放行登录！
+            // if (str_contains($e->getMessage(), 'code has been used')) {
+            //     $recentUser = User::where('provider', $provider)->latest('updated_at')->first();
+            //     if ($recentUser && $recentUser->status !== User::STATUS_INACTIVE) {
+            //         $token = auth('api')->login($recentUser);
+            //         return redirect()->away("{$frontendUrl}/login?token={$token}");
+            //     }
+            // }
+
+            // // 其他失败情况
+            // $errorMessage = urlencode($e->getMessage());
+            // return redirect()->away("{$frontendUrl}/login?error={$errorMessage}");
         }
     }
 

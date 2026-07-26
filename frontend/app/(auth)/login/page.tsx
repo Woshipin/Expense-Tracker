@@ -112,7 +112,7 @@ export default function LoginPage() {
       return;
     }
 
-    // 4. 动态捕获并弹出后端的真实报错内容
+    // 4. 生产环境优雅错误提示
     const error = searchParams.get("error");
     if (error) {
       if (error === "account_banned") {
@@ -121,9 +121,10 @@ export default function LoginPage() {
           type: "error",
         });
       } else {
-        // 🌟 解码并弹出真实的后端错误，不再死板地显示“第三方登录被取消”
+        // 🌟 开发者控制台打印详细错误，页面弹窗展示优雅提示
+        console.error("Social Auth Raw Error:", decodeURIComponent(error));
         setToast({
-          message: decodeURIComponent(error),
+          message: "Social login failed or cancelled. (第三方登录失败或已取消)",
           type: "error",
         });
       }
