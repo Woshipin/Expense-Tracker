@@ -17,7 +17,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   const safePathname = pathname || "";
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
   const [isMobileTransactionsOpen, setIsMobileTransactionsOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
@@ -144,7 +143,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
   }
 
   const isActive = (id: string) => safePathname === id || (safePathname.startsWith(id) && id !== '/');
-  const canSeeUsers = user?.role === 0 || user?.role === 1;
+  
+  // 权限判断：管理员权限 (0: SuperAdmin, 1: Admin)
+  const canSeeUsers = Number(user?.role) === 0 || Number(user?.role) === 1;
+  const canSeeTypes = Number(user?.role) === 0 || Number(user?.role) === 1; // 🌟 仅管理员可见 Types
 
   const desktopNavItems = [
     { id: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, show: true },
@@ -154,12 +156,13 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/budget',      label: 'Budget',      icon: PieChart,        show: true },
   ];
 
+  // Transactions 下拉子菜单 (通过 show: canSeeTypes 过滤 Types)
   const transactionSubItems = [
-    { id: '/expenses',        label: 'Expenses',        icon: ReceiptText },
-    { id: '/income',          label: 'Income',          icon: DollarSign },
-    { id: '/types',           label: 'Types',           icon: Layers },
-    { id: '/categories',      label: 'Categories',      icon: Tags },
-    { id: '/payment-methods', label: 'Payment Methods', icon: CreditCard },
+    { id: '/expenses',        label: 'Expenses',        icon: ReceiptText, show: true },
+    { id: '/income',          label: 'Income',          icon: DollarSign,  show: true },
+    { id: '/types',           label: 'Types',           icon: Layers,      show: canSeeTypes }, // 🌟 条件渲染
+    { id: '/categories',      label: 'Categories',      icon: Tags,        show: true },
+    { id: '/payment-methods', label: 'Payment Methods', icon: CreditCard,  show: true },
   ];
 
   const mobileBottomNavItems = [
@@ -189,7 +192,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
           )}
         </div>
 
-        {/* 【优化 1】：去掉了 parent 上的 overflow-hidden，彻底解决 Profile 图标 hover 提示词被裁切遮挡的问题 */}
+        {/* User Card */}
         <div className="px-4 mb-4 shrink-0">
           <div 
             className={`rounded-2xl border border-orange-300 bg-white/40 flex items-center justify-between transition-all relative ${isSidebarOpen ? "p-3 gap-2" : "justify-center p-2"}`}
@@ -208,7 +211,6 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
               )}
             </div>
 
-            {/* Profile 按钮与浮动 Hover Tooltip */}
             {isSidebarOpen && (
               <button
                 onClick={() => router.push('/profile')}
@@ -289,7 +291,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
             {isSidebarOpen && isTransactionsOpen && (
               <div className="mt-1 ml-4 pl-3 border-l-2 border-orange-200 space-y-1">
-                {transactionSubItems.map((item) => (
+                {transactionSubItems.filter(i => i.show).map((item) => (
                   <button
                     key={item.id}
                     onClick={() => router.push(item.id)}
@@ -309,7 +311,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             )}
           </div>
 
-          {/* 【优化 2】：Logout 直接融入主 nav 列表中，位于 Transactions 下方，不单独成组 */}
+          {/* Logout */}
           <button
             onClick={() => setIsLogoutModalOpen(true)}
             className={`w-full flex items-center justify-between gap-3 rounded-2xl font-bold text-red-600 hover:bg-red-50/80 transition-all duration-200 group relative outline-none mt-2 ${isSidebarOpen ? "px-4 py-3" : "justify-center p-3"}`}
@@ -394,7 +396,7 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
             <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest px-2 pb-2">TRANSACTIONS & SETUP</p>
             
             <div className="space-y-1">
-              {transactionSubItems.map((item) => (
+              {transactionSubItems.filter(i => i.show).map((item) => (
                 <button
                   key={item.id}
                   onClick={() => { router.push(item.id); setIsMobileTransactionsOpen(false); }}

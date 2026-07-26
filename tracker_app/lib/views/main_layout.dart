@@ -28,7 +28,7 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
   bool _isTransactionsExpanded = false;
-  bool _isSidebarOpen = true; // 控制电脑端侧边栏展开/收起
+  bool _isSidebarOpen = true; 
   
   Map<String, dynamic>? _currentUser;
   bool _isLoadingUser = true;
@@ -125,7 +125,6 @@ class _MainLayoutState extends State<MainLayout> {
     }
   }
 
-  // 电脑端侧边栏折叠/展开按钮
   Widget _buildToggleButton({required bool isOpen}) {
     return Material(
       color: Colors.transparent,
@@ -186,8 +185,8 @@ class _MainLayoutState extends State<MainLayout> {
 
     final bool canSeeUsers = roleId == 0 || roleId == 1;
     final bool canSeeAiInsights = roleId == 0 || roleId == 1 || roleId == 2;
+    final bool canSeeTypes = roleId == 0 || roleId == 1; // 🌟 仅管理员可见 Types
 
-    // 如果处于 Transactions 组内，展开 Transactions 选项
     if ([4, 5, 8, 9, 10].contains(_currentIndex) && !_isTransactionsExpanded) {
       _isTransactionsExpanded = true;
     }
@@ -201,7 +200,7 @@ class _MainLayoutState extends State<MainLayout> {
             backgroundColor: SunsetColors.bgStart,
             body: Row(
               children: [
-                // ---------------- 💻 电脑端/iPad 侧边栏 ----------------
+                // 电脑端侧边栏
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
                   curve: Curves.easeInOut,
@@ -216,7 +215,6 @@ class _MainLayoutState extends State<MainLayout> {
                   ),
                   child: Column(
                     children: [
-                      // Logo 品牌区
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 20.0, horizontal: 16.0),
                         child: _isSidebarOpen
@@ -255,7 +253,6 @@ class _MainLayoutState extends State<MainLayout> {
                               ),
                       ),
                       
-                      // 用户 Card 区 (右侧新增 Profile 按钮)
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: _isSidebarOpen ? 16.0 : 8.0),
                         child: Container(
@@ -305,7 +302,6 @@ class _MainLayoutState extends State<MainLayout> {
                       ),
                       const SizedBox(height: 20),
                       
-                      // 导航菜单列表 (排序完全同步 Next.js)
                       Expanded(
                         child: ListView(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -340,14 +336,17 @@ class _MainLayoutState extends State<MainLayout> {
                                   children: [
                                     _buildSidebarSubButton(title: "Expenses", icon: Icons.receipt_long_outlined, index: 4),
                                     _buildSidebarSubButton(title: "Income", icon: Icons.attach_money_outlined, index: 5),
-                                    _buildSidebarSubButton(title: "Types", icon: Icons.layers_outlined, index: 8),
+                                    
+                                    // 🌟 仅管理员可见 Types 按钮
+                                    if (canSeeTypes)
+                                      _buildSidebarSubButton(title: "Types", icon: Icons.layers_outlined, index: 8),
+
                                     _buildSidebarSubButton(title: "Categories", icon: Icons.sell_outlined, index: 9),
                                     _buildSidebarSubButton(title: "Payment Methods", icon: Icons.credit_card_outlined, index: 10),
                                   ],
                                 ),
                               ),
 
-                            // Logout 直接放置在 Transactions 下方，融入同个 Nav List
                             const SizedBox(height: 8),
                             _buildSidebarButton(title: "Logout", icon: Icons.logout, index: -1, color: Colors.red),
                           ],
@@ -361,8 +360,7 @@ class _MainLayoutState extends State<MainLayout> {
             ),
           );
         } else {
-          // ---------------- 📱 手机端 (Mobile Bottom Navigation) ----------------
-          
+          // 手机端 Bottom Navigation
           List<BottomNavigationBarItem> bottomNavItems = [
             const BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: "Dash"),
             const BottomNavigationBarItem(icon: Icon(Icons.auto_awesome_outlined), label: "AI"),
@@ -371,13 +369,12 @@ class _MainLayoutState extends State<MainLayout> {
             const BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: "Settings"),
           ];
 
-          // 重新校准当前选中的 BottomNavigationBar 索引高亮
           int bottomNavCurrentIndex = 0;
           if (_currentIndex == 0) bottomNavCurrentIndex = 0;
           else if (_currentIndex == 1) bottomNavCurrentIndex = 1;
           else if (_currentIndex == 3) bottomNavCurrentIndex = 2;
           else if ([4, 5, 8, 9, 10].contains(_currentIndex)) bottomNavCurrentIndex = 3;
-          else bottomNavCurrentIndex = 4; // Settings / Account (7, 6, 2 等)
+          else bottomNavCurrentIndex = 4;
 
           return Scaffold(
             body: SafeArea(
@@ -403,7 +400,7 @@ class _MainLayoutState extends State<MainLayout> {
                 } else if (index == 2) {
                   setState(() => _currentIndex = 3);
                 } else if (index == 3) {
-                  _showMobileTransactionsMenu();
+                  _showMobileTransactionsMenu(canSeeTypes);
                 } else if (index == 4) {
                   _showMobileSettingsMenu(userName, userRole, canSeeUsers);
                 }
@@ -416,7 +413,6 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // 电脑端菜单按钮
   Widget _buildSidebarButton({required String title, required IconData icon, required int index, Color? color, VoidCallback? onTapOverride}) {
     bool isSelected = _currentIndex == index;
     
@@ -460,7 +456,6 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // 电脑端 Transactions 展开子菜单按钮
   Widget _buildSidebarSubButton({required String title, required IconData icon, required int index}) {
     bool isSelected = _currentIndex == index;
     return Padding(
@@ -483,7 +478,6 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // 手机端 Bottom Sheet 选项通用按钮
   Widget _buildMobileMenuButton({required String title, required IconData icon, required int index, Color? color}) {
     bool isSelected = _currentIndex == index;
     return Padding(
@@ -516,8 +510,8 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // 📱 手机端 Transactions 快捷弹出菜单
-  void _showMobileTransactionsMenu() {
+  // 📱 手机端 Transactions 快捷菜单 (增加 canSeeTypes 参数)
+  void _showMobileTransactionsMenu(bool canSeeTypes) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -552,7 +546,11 @@ class _MainLayoutState extends State<MainLayout> {
               ),
               _buildMobileMenuButton(title: "Expenses", icon: Icons.receipt_long_outlined, index: 4),
               _buildMobileMenuButton(title: "Income", icon: Icons.attach_money_outlined, index: 5),
-              _buildMobileMenuButton(title: "Types", icon: Icons.layers_outlined, index: 8),
+              
+              // 🌟 仅管理员可见 Types 按钮
+              if (canSeeTypes)
+                _buildMobileMenuButton(title: "Types", icon: Icons.layers_outlined, index: 8),
+
               _buildMobileMenuButton(title: "Categories", icon: Icons.sell_outlined, index: 9),
               _buildMobileMenuButton(title: "Payment Methods", icon: Icons.credit_card_outlined, index: 10),
               SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
@@ -563,7 +561,6 @@ class _MainLayoutState extends State<MainLayout> {
     );
   }
 
-  // 📱 手机端 Settings 弹出菜单 (Profile, Budget, Users, Logout)
   void _showMobileSettingsMenu(String userName, String userRole, bool canSeeUsers) {
     showModalBottomSheet(
       context: context,
