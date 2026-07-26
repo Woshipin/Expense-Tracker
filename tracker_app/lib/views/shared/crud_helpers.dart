@@ -137,7 +137,6 @@ void showApiError(BuildContext context, DioException e, String fallback) {
   SunsetToast.show(context, dioMessage(e, fallback), type: SunsetToastType.error);
 }
 
-// 🌟🌟 核心修复区域：PageScaffold 🌟🌟
 class PageScaffold extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -154,15 +153,14 @@ class PageScaffold extends StatelessWidget {
         child: SingleChildScrollView(
           clipBehavior: Clip.none,
           padding: const EdgeInsets.fromLTRB(18, 24, 18, 32),
-          // 🌟 修复点：用 Align 代替 Center，用 SizedBox 强制撑满可用宽度，用 stretch 强制子组件拉伸
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1240),
               child: SizedBox(
-                width: double.infinity, // 强制达到最大可用宽度
+                width: double.infinity,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch, // 强制所有子组件横向填满
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     LayoutBuilder(
                       builder: (context, constraints) {
@@ -286,22 +284,24 @@ class ProviderBadge extends StatelessWidget {
   }
 }
 
+// 🌟 统一常亮深橙色边框组件
 InputDecoration sunsetFieldDecoration(String hint, {IconData? icon, Widget? suffixIcon}) {
   return InputDecoration(
     hintText: hint,
+    hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13, fontWeight: FontWeight.w500),
     prefixIcon: icon == null ? null : Icon(icon, size: 19, color: const Color(0x662D2520)),
     suffixIcon: suffixIcon,
     filled: true,
     fillColor: Colors.white,
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    isDense: true, // 🌟 修复边框裁切的关键
+    isDense: true, 
     enabledBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.28)),
+      borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.80), width: 1.5),
     ),
     focusedBorder: OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5),
+      borderSide: const BorderSide(color: SunsetColors.primary, width: 2.0),
     ),
   );
 }
@@ -402,7 +402,6 @@ class ActionButtons extends StatelessWidget {
   }
 }
 
-// 🌟 修复确认删除弹窗
 Future<bool> confirmDeleteDialog(BuildContext context, {required String title, required String name, required IconData icon}) async {
   final isMobile = MediaQuery.of(context).size.width < 600;
   
@@ -414,10 +413,10 @@ Future<bool> confirmDeleteDialog(BuildContext context, {required String title, r
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Container(
-        width: isMobile ? double.infinity : 460, // 🌟 自适应宽度
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85), // 🌟 限制最高高度
+        width: isMobile ? double.infinity : 460, 
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85), 
         child: Column(
-          mainAxisSize: MainAxisSize.min, // 🌟 根据内容收缩
+          mainAxisSize: MainAxisSize.min, 
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(

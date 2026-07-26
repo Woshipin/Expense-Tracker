@@ -31,8 +31,8 @@ class _ExpenseListViewState extends State<ExpenseListView> {
   final String endpoint = '/expenses';
   final String singular = 'Expense';
   final String plural = 'Expenses';
-  final Color amountColor = const Color(0xFFEF4444); // 红色
-  final int typeId = 1; // 1 代表 Expense
+  final Color amountColor = const Color(0xFFEF4444);
+  final int typeId = 1;
 
   @override
   void initState() {
@@ -66,7 +66,6 @@ class _ExpenseListViewState extends State<ExpenseListView> {
     }
   }
 
-  // 仅获取 status=1 & type_id=1 (Expense) 的分类和支付方式
   Future<void> _loadOptions() async {
     try {
       final responses = await Future.wait([
@@ -128,6 +127,7 @@ class _ExpenseListViewState extends State<ExpenseListView> {
   Future<void> _save({JsonMap? editing}) async {
     final result = await showDialog<_ExpenseFormData>(
       context: context,
+      barrierColor: SunsetColors.dark.withValues(alpha: 0.42),
       builder: (_) => ExpenseFormDialog(
         title: editing == null ? 'Add $singular' : 'Edit $singular', 
         editing: editing, 
@@ -224,35 +224,14 @@ class _ExpenseListViewState extends State<ExpenseListView> {
     );
   }
 
-  // 🌟 核心：所有过滤框统一为清晰常亮橙色边框
-  InputDecoration _customFilterDecoration(String hint, {IconData? icon}) {
-    return InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13, fontWeight: FontWeight.w500),
-      prefixIcon: icon != null ? Icon(icon, size: 18, color: Colors.grey.shade400) : null,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      filled: true,
-      fillColor: Colors.white,
-      isDense: true,
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10), 
-        borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.80), width: 1.5),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: SunsetColors.primary, width: 2.0),
-      ),
-    );
-  }
-
-  Widget _customSearchField() => TextField(controller: _search.controller, onChanged: (_) => _search.onChanged(() { _page = 1; _load(); }), decoration: _customFilterDecoration('Search ${plural.toLowerCase()}...', icon: Icons.search));
-  Widget _customDateField(TextEditingController controller, String hint) => TextField(controller: controller, readOnly: true, onTap: () => _selectDateFilter(controller), decoration: _customFilterDecoration(hint));
+  Widget _customSearchField() => TextField(controller: _search.controller, onChanged: (_) => _search.onChanged(() { _page = 1; _load(); }), decoration: sunsetFieldDecoration('Search ${plural.toLowerCase()}...', icon: Icons.search));
+  Widget _customDateField(TextEditingController controller, String hint) => TextField(controller: controller, readOnly: true, onTap: () => _selectDateFilter(controller), decoration: sunsetFieldDecoration(hint));
   
   Widget _customDropdown(String value, String hint, List<JsonMap> options, ValueChanged<String> onChanged) {
     return DropdownButtonFormField<String>(
-      initialValue: value,
+      value: value,
       icon: const Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 20),
-      decoration: _customFilterDecoration(hint),
+      decoration: sunsetFieldDecoration(hint),
       items: [
         DropdownMenuItem(value: 'all', child: Text(hint, style: const TextStyle(fontSize: 13, color: SunsetColors.dark))),
         ...options.map((item) => DropdownMenuItem(value: '${item['id']}', child: Text(fieldText(item, 'name'), style: const TextStyle(fontSize: 13, color: SunsetColors.dark)))),
@@ -531,6 +510,7 @@ class _ExpenseFormData {
   Map<String, dynamic> toJson() => { 'title': title, 'description': description, 'price': price, 'date': date, 'time': time, 'payment_method_id': paymentMethodId, 'category_id': categoryId };
 }
 
+// 🌟 核心升级：带有模块化分区和清晰 Field Label 的 ExpenseFormDialog
 class ExpenseFormDialog extends StatefulWidget {
   final String title; final JsonMap? editing; final List<JsonMap> categories; final List<JsonMap> methods;
   const ExpenseFormDialog({super.key, required this.title, this.editing, required this.categories, required this.methods});
@@ -572,89 +552,233 @@ class _ExpenseFormDialogState extends State<ExpenseFormDialog> {
     if (time != null) setState(() => _time.text = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}');
   }
 
+  Widget _fieldLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 6),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          color: Color(0xB32D2520),
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool hasNoCategories = widget.categories.isEmpty;
     final bool hasNoMethods = widget.methods.isEmpty;
 
-    return AlertDialog(
+    return Dialog(
+      insetPadding: const EdgeInsets.all(16),
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text(widget.title, style: const TextStyle(fontWeight: FontWeight.w900)),
-      content: SizedBox(
-        width: 460, 
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(controller: _title, decoration: sunsetFieldDecoration('Title')),
-              const SizedBox(height: 14),
-              TextField(controller: _price, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: sunsetFieldDecoration('Amount (RM)')),
-              const SizedBox(height: 14),
-              TextField(controller: _date, readOnly: true, onTap: _selectDate, decoration: sunsetFieldDecoration('Date')),
-              const SizedBox(height: 14),
-              TextField(controller: _time, readOnly: true, onTap: _selectTime, decoration: sunsetFieldDecoration('Time')),
-              const SizedBox(height: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // 顶栏 Header
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 18, 16, 18),
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10)))),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(widget.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: SunsetColors.dark)),
+                  IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => Navigator.pop(context)),
+                ],
+              ),
+            ),
 
-              // 🌟 Category 下拉框空状态预警框
-              if (hasNoCategories)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
-                      SizedBox(width: 8),
-                      Expanded(child: Text("No Expense Category found. Please add a category first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
-                    ],
+            // 中间表单区域
+            Flexible(
+              child: SingleChildScrollView(
+                clipBehavior: Clip.none,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Card 1: Basic Details
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF7ED).withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFFFEDD5)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.receipt_long_outlined, size: 18, color: SunsetColors.primary),
+                              SizedBox(width: 8),
+                              Text("Basic Details", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: SunsetColors.primary, letterSpacing: 0.8)),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          _fieldLabel('TITLE'),
+                          TextField(controller: _title, decoration: sunsetFieldDecoration('E.g. Groceries, Netflix')),
+                          const SizedBox(height: 14),
+
+                          _fieldLabel('AMOUNT (RM)'),
+                          TextField(
+                            controller: _price, 
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
+                            decoration: sunsetFieldDecoration('0.00'),
+                          ),
+                          const SizedBox(height: 14),
+
+                          _fieldLabel('DESCRIPTION (OPTIONAL)'),
+                          TextField(controller: _description, maxLines: 3, decoration: sunsetFieldDecoration('Enter a brief description...')),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Card 2: Categorization & Time
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(Icons.access_time_outlined, size: 18, color: Color(0xFF64748B)),
+                              SizedBox(width: 8),
+                              Text("Categorization & Time", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF475569), letterSpacing: 0.8)),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _fieldLabel('DATE'),
+                                    TextField(controller: _date, readOnly: true, onTap: _selectDate, decoration: sunsetFieldDecoration('Date')),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _fieldLabel('TIME'),
+                                    TextField(controller: _time, readOnly: true, onTap: _selectTime, decoration: sunsetFieldDecoration('Time')),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+
+                          _fieldLabel('CATEGORY'),
+                          if (hasNoCategories)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                                  SizedBox(width: 8),
+                                  Expanded(child: Text("No Expense Category found. Please add a category first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
+                                ],
+                              ),
+                            )
+                          else
+                            _dropdown(_categoryId, 'Select Category', widget.categories, (value) => setState(() => _categoryId = value)),
+
+                          const SizedBox(height: 14),
+
+                          _fieldLabel('PAYMENT METHOD'),
+                          if (hasNoMethods)
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                                  SizedBox(width: 8),
+                                  Expanded(child: Text("No Expense Payment Method found. Please add a method first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
+                                ],
+                              ),
+                            )
+                          else
+                            _dropdown(_methodId, 'Select Method', widget.methods, (value) => setState(() => _methodId = value)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 底栏 Footer
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
+                border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10))),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
                   ),
-                )
-              else
-                _dropdown(_categoryId, 'Category', widget.categories, (value) => setState(() => _categoryId = value)),
-
-              const SizedBox(height: 14),
-
-              // 🌟 Payment Method 下拉框空状态预警框
-              if (hasNoMethods)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
-                      SizedBox(width: 8),
-                      Expanded(child: Text("No Expense Payment Method found. Please add a method first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
-                    ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: (hasNoCategories || hasNoMethods) ? null : () {
+                        if (_title.text.trim().isEmpty || _price.text.trim().isEmpty || _categoryId.isEmpty || _methodId.isEmpty) return;
+                        Navigator.pop(context, _ExpenseFormData(
+                          title: _title.text.trim(), description: _description.text.trim(), 
+                          price: _price.text.trim(), date: _date.text.trim(), 
+                          time: _time.text.trim(), paymentMethodId: _methodId, categoryId: _categoryId
+                        ));
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Save Expense', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
                   ),
-                )
-              else
-                _dropdown(_methodId, 'Payment Method', widget.methods, (value) => setState(() => _methodId = value)),
-
-              const SizedBox(height: 14),
-              TextField(controller: _description, maxLines: 3, decoration: sunsetFieldDecoration('Description (Optional)')),
-            ],
-          ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      actions: [
-        OutlinedButton(onPressed: () => Navigator.pop(context), style: OutlinedButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))), child: const Text('Cancel')),
-        ElevatedButton(
-          onPressed: (hasNoCategories || hasNoMethods) ? null : () {
-            if (_title.text.trim().isEmpty || _price.text.trim().isEmpty || _categoryId.isEmpty || _methodId.isEmpty) return;
-            Navigator.pop(context, _ExpenseFormData(title: _title.text.trim(), description: _description.text.trim(), price: _price.text.trim(), date: _date.text.trim(), time: _time.text.trim(), paymentMethodId: _methodId, categoryId: _categoryId));
-          },
-          style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-          child: const Text('Save'),
-        ),
-      ],
     );
   }
 
-  Widget _dropdown(String value, String label, List<JsonMap> options, ValueChanged<String> onChanged) {
+  Widget _dropdown(String value, String hint, List<JsonMap> options, ValueChanged<String> onChanged) {
     return DropdownButtonFormField<String>(
       initialValue: value.isEmpty ? null : value, 
-      decoration: sunsetFieldDecoration(label),
+      decoration: sunsetFieldDecoration(hint),
       items: options.map((item) => DropdownMenuItem(value: '${item['id']}', child: Text(fieldText(item, 'name')))).toList(),
       onChanged: (value) { if (value != null) onChanged(value); },
     );
