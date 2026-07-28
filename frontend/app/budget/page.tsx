@@ -75,7 +75,7 @@ function getDaysLeftText(year: number, month: number) {
   return daysLeft === 0 ? "Last day" : `${daysLeft} days left`;
 }
 
-// 🌟 AI 分析状态算法 (超出的金额采用鲜艳纯红字强显)
+// 🌟 AI 分析状态算法 (不同 Status 下金额数字渲染不同颜色)
 function getAiInsight(b: Budget): {
   status: string;
   icon: any;
@@ -89,6 +89,7 @@ function getAiInsight(b: Budget): {
   const catName = b.category?.name || "this category";
   const overAmount = Math.max(0, b.spent - b.amount);
 
+  // 1. 超出预算：红色数字
   if (b.percentage >= 100) {
     return {
       status: "Over Budget",
@@ -108,6 +109,7 @@ function getAiInsight(b: Budget): {
     };
   }
   
+  // 2. 危险警告：红色数字
   if (remainingRatio <= 20) {
     return {
       status: "Warning",
@@ -127,6 +129,7 @@ function getAiInsight(b: Budget): {
     };
   }
 
+  // 3. 注意观察：黄色数字
   if (remainingRatio <= 50) {
     return {
       status: "Watch It",
@@ -136,12 +139,17 @@ function getAiInsight(b: Budget): {
       cardClass: "border-amber-200 bg-white hover:border-amber-300",
       message: (
         <span>
-          You're halfway through your {catName} limit. Keep an eye on expenses for the next {daysLeftText}.
+          You're halfway through your {catName} limit. You've spent{" "}
+          <strong className="text-amber-600 font-black">
+            RM {b.spent.toFixed(2)}
+          </strong>{" "}
+          with {daysLeftText}.
         </span>
       ),
     };
   }
 
+  // 4. 健康状态：翡翠绿数字
   return {
     status: "On Track",
     icon: CheckCircle,
@@ -232,6 +240,21 @@ export default function BudgetPage() {
         remaining: Number(b.remaining) || 0,
         percentage: Number(b.percentage) || 0,
       }));
+
+      // 🌟 核心算法：按与当前时间的绝对距离升序排序 (越接近当月的排在最上面)
+      const currentMonthVal = now.getFullYear() * 12 + (now.getMonth() + 1);
+      safeBudgets.sort((a, b) => {
+        const valA = a.year * 12 + a.month;
+        const valB = b.year * 12 + b.month;
+
+        const diffA = Math.abs(valA - currentMonthVal);
+        const diffB = Math.abs(valB - currentMonthVal);
+
+        if (diffA !== diffB) {
+          return diffA - diffB;
+        }
+        return valB - valA;
+      });
 
       setBudgets(safeBudgets);
     } catch (err: any) {
@@ -573,7 +596,7 @@ export default function BudgetPage() {
             </select>
           </div>
 
-          {/* 🌟 核心改进 1：清空过滤器按键 (完全对齐 Refresh 按钮的设计与颜色) */}
+          {/* 清空过滤器按键 */}
           <button 
             onClick={handleClearFilters}
             className="w-10 h-10 rounded-2xl bg-white shadow-sm border border-orange-500/80 flex items-center justify-center text-sunset-dark hover:bg-gray-50 transition-colors shrink-0"
@@ -695,7 +718,7 @@ export default function BudgetPage() {
                           />
                         </div>
 
-                        {/* 进度条下方提醒：超支金额采用鲜艳常亮红字 */}
+                        {/* 🌟 进度条下方提醒：超支金额采用鲜艳常亮红字 */}
                         <div className="flex justify-between items-center text-xs font-semibold text-gray-500 mb-6">
                           <span>{b.percentage.toFixed(0)}% Used · {daysLeftText}</span>
                           {isOver ? (
@@ -707,6 +730,7 @@ export default function BudgetPage() {
                           )}
                         </div>
 
+                        {/* 🌟 AI 洞察提示信息 */}
                         <div className="flex items-start gap-3">
                           <StatusIcon size={20} className={`shrink-0 mt-0.5 ${insight.colorClass}`} />
                           <div>

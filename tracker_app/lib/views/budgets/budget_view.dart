@@ -1,13 +1,15 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 🌟 新增：用于限制输入框格式
+import 'package:flutter/services.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/constants/colors.dart';
 import '../../core/widgets/toast.dart';
+import '../shared/crud_helpers.dart';
 
-// 常量
+// 月份常量
 const List<String> _months = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"
@@ -28,23 +30,25 @@ class _BudgetViewState extends State<BudgetView> {
   List<BudgetModel> _displayedBudgets = [];
   List<CategoryLite> _categories = [];
 
-  int? _selectedMonth; // null means 'all'
-  int? _selectedYear;  // null means 'all'
-  late int _currentYear;
+  int? _selectedMonth; // null 代表 'all'
+  int? _selectedYear;  // null 代表 'all'
+
+  // 动态生成前 10 年至后 10 年的年份数组
+  List<int> get _filterYears {
+    final currentYear = DateTime.now().year;
+    return List.generate(21, (index) => (currentYear - 10) + index);
+  }
 
   @override
   void initState() {
     super.initState();
-    final now = DateTime.now();
-    _currentYear = now.year;
-    
     _fetchCategories();
     _fetchBudgets();
   }
 
   Future<void> _fetchCategories() async {
     try {
-      final response = await ApiClient().dio.get('/categories');
+      final response = await ApiClient().dio.get('/categories', queryParameters: {'status': '1'});
       final dynamic payload = response.data;
       final List<dynamic> rawItems = payload is Map<String, dynamic>
           ? (payload['data'] as List<dynamic>? ?? payload['items'] ?? [])
@@ -80,14 +84,43 @@ class _BudgetViewState extends State<BudgetView> {
     }
   }
 
+  // 🌟 核心：过滤并按照“越靠近当前年月排在越上方”的算法进行排序
   void _applyFilters() {
-    setState(() {
-      _displayedBudgets = _allBudgets.where((b) {
-        final matchMonth = _selectedMonth == null || b.month == _selectedMonth;
-        final matchYear = _selectedYear == null || b.year == _selectedYear;
-        return matchMonth && matchYear;
-      }).toList();
+    final now = DateTime.now();
+    final currentMonthVal = now.year * 12 + now.month;
+
+    final filtered = _allBudgets.where((b) {
+      final matchMonth = _selectedMonth == null || b.month == _selectedMonth;
+      final matchYear = _selectedYear == null || b.year == _selectedYear;
+      return matchMonth && matchYear;
+    }).toList();
+
+    // 智能排序：距当前时间绝对值越小的，优先排在前面
+    filtered.sort((a, b) {
+      final valA = a.year * 12 + a.month;
+      final valB = b.year * 12 + b.month;
+
+      final diffA = (valA - currentMonthVal).abs();
+      final diffB = (valB - currentMonthVal).abs();
+
+      if (diffA != diffB) {
+        return diffA.compareTo(diffB);
+      }
+      return valB.compareTo(valA); // 距离相同时，最新的在前
     });
+
+    setState(() {
+      _displayedBudgets = filtered;
+    });
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _selectedMonth = null;
+      _selectedYear = null;
+    });
+    _applyFilters();
+    SunsetToast.show(context, 'Filters reset to default', type: SunsetToastType.success);
   }
 
   Future<void> _handleReanalyze() async {
@@ -127,6 +160,19 @@ class _BudgetViewState extends State<BudgetView> {
     }
   }
 
+  Map<String, List<BudgetModel>> get _groupedBudgets {
+    final Map<String, List<BudgetModel>> groups = {};
+
+    for (var b in _displayedBudgets) {
+      final typeName = b.category.typeName;
+      if (!groups.containsKey(typeName)) {
+        groups[typeName] = [];
+      }
+      groups[typeName]!.add(b);
+    }
+    return groups;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,11 +191,11 @@ class _BudgetViewState extends State<BudgetView> {
                   _buildHeader(width),
                   const SizedBox(height: 24),
                   if (_isLoading)
-                    _buildLoading(width) // 🌟 修复：传入宽度使加载动画也响应式
+                    _buildLoading(width)
                   else if (_displayedBudgets.isEmpty)
                     _buildEmptyState()
                   else
-                    _buildBudgetContent(width),
+                    _buildGroupedBudgetContent(width),
                 ],
               ),
             );
@@ -176,16 +222,16 @@ class _BudgetViewState extends State<BudgetView> {
         ),
         SizedBox(height: isMobile ? 16 : 0, width: isMobile ? 0 : 12),
         Wrap(
-          spacing: 12,
-          runSpacing: 12,
+          spacing: 10,
+          runSpacing: 10,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.1)),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.80), width: 1.5),
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4, offset: const Offset(0, 2))],
               ),
               child: Row(
@@ -197,15 +243,11 @@ class _BudgetViewState extends State<BudgetView> {
                     items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text(_months[i]))),
                     onChanged: (val) => setState(() { _selectedMonth = val; _applyFilters(); }),
                   ),
-                  Container(width: 1, height: 16, color: const Color(0xFFF97316).withValues(alpha: 0.2), margin: const EdgeInsets.symmetric(horizontal: 8)),
+                  Container(width: 1, height: 16, color: SunsetColors.primary.withValues(alpha: 0.2), margin: const EdgeInsets.symmetric(horizontal: 6)),
                   _buildFilterDropdown(
                     value: _selectedYear,
                     hint: 'All Years',
-                    items: [
-                      DropdownMenuItem(value: _currentYear - 1, child: Text('${_currentYear - 1}')),
-                      DropdownMenuItem(value: _currentYear, child: Text('$_currentYear')),
-                      DropdownMenuItem(value: _currentYear + 1, child: Text('${_currentYear + 1}')),
-                    ],
+                    items: _filterYears.map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(),
                     onChanged: (val) => setState(() { _selectedYear = val; _applyFilters(); }),
                   ),
                 ],
@@ -213,20 +255,37 @@ class _BudgetViewState extends State<BudgetView> {
             ),
             
             InkWell(
-              onTap: _isAnalyzing ? null : _handleReanalyze,
-              borderRadius: BorderRadius.circular(10),
+              onTap: _clearFilters,
+              borderRadius: BorderRadius.circular(12),
               child: Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
                   color: Colors.white, 
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.1)),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.80), width: 1.5),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4)],
+                ),
+                child: const Center(
+                  child: Icon(Icons.filter_alt_off_outlined, size: 18, color: SunsetColors.dark),
+                ),
+              ),
+            ),
+
+            InkWell(
+              onTap: _isAnalyzing ? null : _handleReanalyze,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white, 
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.80), width: 1.5),
                   boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 4)],
                 ),
                 child: Center(
                   child: _isAnalyzing
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFF97316)))
-                      : const Icon(Icons.refresh, size: 18, color: SunsetColors.dark),
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: SunsetColors.primary))
+                      : const Icon(Icons.sync, size: 18, color: SunsetColors.dark),
                 ),
               ),
             ),
@@ -236,13 +295,12 @@ class _BudgetViewState extends State<BudgetView> {
               icon: const Icon(Icons.add, size: 18),
               label: const Text('Add Budget'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF97316),
+                backgroundColor: SunsetColors.secondary,
                 foregroundColor: Colors.white,
                 elevation: 4,
-                shadowColor: const Color(0xFFF97316).withValues(alpha: 0.3),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800),
               ),
             ),
           ],
@@ -254,7 +312,8 @@ class _BudgetViewState extends State<BudgetView> {
   Widget _buildFilterDropdown({required int? value, required String hint, required List<DropdownMenuItem<int>> items, required Function(int?) onChanged}) {
     return DropdownButton<int>(
       value: value,
-      hint: Text(hint, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: SunsetColors.dark)),
+      dropdownColor: Colors.white,
+      hint: Text(hint, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: SunsetColors.dark)),
       items: [
         DropdownMenuItem<int>(value: null, child: Text(hint)),
         ...items,
@@ -262,26 +321,25 @@ class _BudgetViewState extends State<BudgetView> {
       onChanged: onChanged,
       underline: const SizedBox(),
       icon: const SizedBox.shrink(),
-      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: SunsetColors.dark),
+      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: SunsetColors.dark),
       alignment: Alignment.center,
     );
   }
 
   Widget _buildLoading(double width) {
-    // 🌟 修复：响应式列数，防止手机端挤扁
-    int cols = width >= 1200 ? 3 : (width >= 700 ? 2 : 1);
+    int cols = width >= 1100 ? 2 : 1;
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: cols, 
-        mainAxisSpacing: 24, 
-        crossAxisSpacing: 24, 
+        mainAxisSpacing: 20, 
+        crossAxisSpacing: 20, 
         mainAxisExtent: 290
       ),
-      itemCount: cols == 1 ? 2 : 4, // 手机端只显示2个骨架屏省空间
+      itemCount: 2,
       itemBuilder: (context, index) => Container(
-        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.4), borderRadius: BorderRadius.circular(20)),
       ),
     );
   }
@@ -291,28 +349,28 @@ class _BudgetViewState extends State<BudgetView> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 20),
       decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF97316).withValues(alpha: 0.2), width: 2, style: BorderStyle.solid),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: SunsetColors.primary.withValues(alpha: 0.2), width: 1.5),
       ),
       child: Column(
         children: [
           Container(
             width: 64, height: 64,
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)]),
-            child: const Icon(Icons.error_outline, size: 28, color: Color(0x66F97316)),
+            decoration: BoxDecoration(color: const Color(0xFFFFF7ED), borderRadius: BorderRadius.circular(16)),
+            child: const Icon(Icons.error_outline, size: 28, color: SunsetColors.primary),
           ),
           const SizedBox(height: 16),
-          const Text('No budgets found', style: TextStyle(color: Color(0x992D2520), fontSize: 18, fontWeight: FontWeight.w700)),
+          const Text('No budgets found', style: TextStyle(color: SunsetColors.dark, fontSize: 18, fontWeight: FontWeight.w800)),
           const SizedBox(height: 4),
-          const Text('Try changing your filters or create a new one.', style: TextStyle(color: Color(0x662D2520), fontSize: 13, fontWeight: FontWeight.w600)),
+          const Text('Try changing your filters or create a new one.', style: TextStyle(color: Color(0x992D2520), fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 24),
           ElevatedButton.icon(
             onPressed: () => _openFormDialog(null),
             icon: const Icon(Icons.add, size: 16),
             label: const Text('Create First Budget'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white,
+              backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
@@ -322,21 +380,56 @@ class _BudgetViewState extends State<BudgetView> {
     );
   }
 
-  Widget _buildBudgetContent(double width) {
-    // 🌟 修复：无论手机还是桌面，统一使用 GridView 并配合动态列数。
-    // 这解决了以前手机端使用 Column 导致的布局高度计算崩溃问题。
-    int cols = width >= 1200 ? 3 : (width >= 700 ? 2 : 1);
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _displayedBudgets.length,
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: cols, 
-        mainAxisSpacing: 24, 
-        crossAxisSpacing: 24, 
-        mainAxisExtent: 290, // 固定高度保护，防止文字被切或无限高度溢出
-      ),
-      itemBuilder: (context, index) => _buildBudgetCard(_displayedBudgets[index]),
+  Widget _buildGroupedBudgetContent(double width) {
+    int cols = width >= 1100 ? 2 : 1;
+    final grouped = _groupedBudgets;
+
+    return Column(
+      children: grouped.entries.map((entry) {
+        final typeName = entry.key;
+        final items = entry.value;
+        final isIncome = typeName.toLowerCase().contains('income');
+        final headerColor = isIncome ? const Color(0xFF059669) : SunsetColors.expense;
+        final badgeBg = isIncome ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2);
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 28.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.grey.shade200))),
+                child: Row(
+                  children: [
+                    Text(typeName, style: TextStyle(color: headerColor, fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(99)),
+                      child: Text('(${items.length})', style: TextStyle(color: headerColor, fontSize: 11, fontWeight: FontWeight.w800)),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: items.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols, 
+                  mainAxisSpacing: 20, 
+                  crossAxisSpacing: 20, 
+                  mainAxisExtent: 290, 
+                ),
+                itemBuilder: (context, index) => _buildBudgetCard(items[index]),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -344,16 +437,20 @@ class _BudgetViewState extends State<BudgetView> {
     final insight = _getAiInsight(budget);
     final daysLeftText = _getDaysLeftText(budget.year, budget.month);
     
-    // 🌟 修复：安全检查百分比，防止 NaN 或 Infinity 导致 clamp() 崩溃
     double safePercent = budget.percentage;
     if (safePercent.isNaN || safePercent.isInfinite) safePercent = 0.0;
     final widthFactor = (safePercent / 100).clamp(0.0, 1.0);
 
+    final isOver = budget.spent > budget.amount;
+    final overAmount = math.max(0.0, budget.spent - budget.amount);
+    final typeName = budget.category.typeName;
+    final isIncome = typeName.toLowerCase().contains('income');
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: Colors.white, 
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(color: insight.borderColor, width: 1.5),
         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 8, offset: const Offset(0, 3))],
       ),
@@ -361,21 +458,49 @@ class _BudgetViewState extends State<BudgetView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 头部
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 width: 48, height: 48,
-                decoration: BoxDecoration(color: budget.category.color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: budget.category.color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
                 child: Icon(_iconForName(budget.category.icon), color: budget.category.color, size: 24),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(budget.category.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: SunsetColors.dark, fontSize: 18, fontWeight: FontWeight.w900)),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            budget.category.name, 
+                            maxLines: 1, 
+                            overflow: TextOverflow.ellipsis, 
+                            style: const TextStyle(color: SunsetColors.dark, fontSize: 17, fontWeight: FontWeight.w900)
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isIncome ? const Color(0xFFECFDF5) : const Color(0xFFFFF7ED),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: isIncome ? const Color(0xFFA7F3D0) : const Color(0xFFFFEDD5)),
+                          ),
+                          child: Text(
+                            typeName.toUpperCase(),
+                            style: TextStyle(
+                              color: isIncome ? const Color(0xFF059669) : SunsetColors.secondary,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                     if (_selectedMonth == null || _selectedYear == null)
                       Padding(
                         padding: const EdgeInsets.only(top: 2),
@@ -387,64 +512,76 @@ class _BudgetViewState extends State<BudgetView> {
               Row(
                 children: [
                   _actionButton(Icons.edit_outlined, Colors.blue, () => _openFormDialog(budget)),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   _actionButton(Icons.delete_outline, Colors.red, () => _openDeleteDialog(budget)),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           
-          // 金额
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.end,
             children: [
-              Text('RM ${budget.spent.toStringAsFixed(2)}', style: const TextStyle(color: SunsetColors.dark, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: -1)),
+              Text('RM ${budget.spent.toStringAsFixed(2)}', style: const TextStyle(color: SunsetColors.dark, fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
               const SizedBox(width: 8),
               Padding(
-                padding: const EdgeInsets.only(bottom: 6.0),
-                child: Text('of RM ${budget.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.w700)),
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Text('of RM ${budget.amount.toStringAsFixed(2)}', style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           
-          // 进度条
           Container(
             height: 10, width: double.infinity,
             decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(10)),
             alignment: Alignment.centerLeft,
             child: FractionallySizedBox(
-              widthFactor: widthFactor, // 🌟 使用处理过的安全值
+              widthFactor: widthFactor,
               child: Container(decoration: BoxDecoration(color: insight.barColor, borderRadius: BorderRadius.circular(10))),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           
-          // 比例信息
+          // 🌟 进度条下方提醒：超支金额展现常亮鲜红字
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text('${safePercent.toStringAsFixed(0)}% Used · $daysLeftText', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w700)),
-              Text('RM ${(budget.remaining > 0 ? budget.remaining : 0).toStringAsFixed(2)} left', style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w700)),
+              if (isOver)
+                Text(
+                  'RM ${overAmount.toStringAsFixed(2)} over limit',
+                  style: const TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.w900),
+                )
+              else
+                Text(
+                  'RM ${(budget.remaining > 0 ? budget.remaining : 0).toStringAsFixed(2)} left',
+                  style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w700),
+                ),
             ],
           ),
           
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           
-          // AI 洞察
+          // 🌟 AI 洞察提示：带有单独着色的富文本 RichText 数字
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Padding(padding: const EdgeInsets.only(top: 2), child: Icon(insight.icon, size: 20, color: insight.textColor)),
-              const SizedBox(width: 12),
+              Padding(padding: const EdgeInsets.only(top: 2), child: Icon(insight.icon, size: 18, color: insight.textColor)),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(insight.status, style: TextStyle(color: insight.textColor, fontSize: 14, fontWeight: FontWeight.w800)),
+                    Text(insight.status, style: TextStyle(color: insight.textColor, fontSize: 13, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
-                    Text(insight.message, style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600, height: 1.4)),
+                    Text.rich(
+                      TextSpan(
+                        style: const TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w600, height: 1.3),
+                        children: insight.spans,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -461,8 +598,8 @@ class _BudgetViewState extends State<BudgetView> {
       borderRadius: BorderRadius.circular(8),
       child: Container(
         width: 32, height: 32,
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, size: 16, color: Colors.grey.shade400),
+        decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey.shade200)),
+        child: Icon(icon, size: 16, color: Colors.grey.shade500),
       ),
     );
   }
@@ -492,15 +629,82 @@ class _BudgetViewState extends State<BudgetView> {
     return daysLeft == 0 ? "Last day" : "$daysLeft days left";
   }
 
+  // 🌟 核心升级：带有不同颜色 Highlight TextSpan 的 AI 洞察分析器
   AiInsight _getAiInsight(BudgetModel b) {
     final remainingRatio = 100 - b.percentage;
     final daysLeftText = _getDaysLeftText(b.year, b.month);
     final catName = b.category.name;
+    final overAmount = math.max(0.0, b.spent - b.amount);
 
-    if (b.percentage >= 100) return AiInsight(status: "Over Budget", icon: Icons.error_outline, textColor: Colors.red.shade600, barColor: Colors.red.shade500, borderColor: Colors.red.shade200, message: "You've exceeded your $catName budget!");
-    if (remainingRatio <= 20) return AiInsight(status: "Warning", icon: Icons.warning_amber_rounded, textColor: Colors.red.shade500, barColor: Colors.red.shade500, borderColor: Colors.red.shade200, message: "Only ${remainingRatio.toStringAsFixed(1)}% remaining! You've spent RM ${b.spent.toStringAsFixed(2)} with $daysLeftText.");
-    if (remainingRatio <= 50) return AiInsight(status: "Watch It", icon: Icons.warning_amber_rounded, textColor: Colors.amber.shade600, barColor: Colors.amber.shade400, borderColor: Colors.amber.shade200, message: "Halfway through your $catName limit. Keep an eye on expenses.");
-    return AiInsight(status: "On Track", icon: Icons.check_circle_outline, textColor: Colors.teal.shade500, barColor: Colors.teal.shade400, borderColor: Colors.grey.shade200, message: "Looking good! You have RM ${b.remaining.toStringAsFixed(2)} left.");
+    if (b.percentage >= 100) {
+      return AiInsight(
+        status: "Over Budget", 
+        icon: Icons.error_outline, 
+        textColor: Colors.red.shade600, 
+        barColor: Colors.red.shade500, 
+        borderColor: Colors.red.shade200, 
+        spans: [
+          const TextSpan(text: "You've exceeded your "),
+          TextSpan(text: catName, style: const TextStyle(fontWeight: FontWeight.bold, color: SunsetColors.dark)),
+          const TextSpan(text: " budget limit by "),
+          TextSpan(
+            text: "RM ${overAmount.toStringAsFixed(2)}",
+            style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.w900),
+          ),
+          const TextSpan(text: "! Please stop spending."),
+        ],
+      );
+    }
+    if (remainingRatio <= 20) {
+      return AiInsight(
+        status: "Warning", 
+        icon: Icons.warning_amber_rounded, 
+        textColor: Colors.red.shade500, 
+        barColor: Colors.red.shade500, 
+        borderColor: Colors.red.shade200, 
+        spans: [
+          const TextSpan(text: "Only "),
+          TextSpan(text: "${remainingRatio.toStringAsFixed(1)}%", style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.w900)),
+          const TextSpan(text: " remaining! You've spent "),
+          TextSpan(text: "RM ${b.spent.toStringAsFixed(2)}", style: TextStyle(color: Colors.red.shade600, fontWeight: FontWeight.w900)),
+          TextSpan(text: " with $daysLeftText."),
+        ],
+      );
+    }
+    if (remainingRatio <= 50) {
+      return AiInsight(
+        status: "Watch It", 
+        icon: Icons.warning_amber_rounded, 
+        textColor: Colors.amber.shade700, 
+        barColor: Colors.amber.shade400, 
+        borderColor: Colors.amber.shade200, 
+        spans: [
+          const TextSpan(text: "Halfway through your "),
+          TextSpan(text: catName, style: const TextStyle(fontWeight: FontWeight.bold, color: SunsetColors.dark)),
+          const TextSpan(text: " limit. You've spent "),
+          TextSpan(
+            text: "RM ${b.spent.toStringAsFixed(2)}",
+            style: TextStyle(color: Colors.amber.shade700, fontWeight: FontWeight.w900),
+          ),
+          TextSpan(text: " with $daysLeftText."),
+        ],
+      );
+    }
+    return AiInsight(
+      status: "On Track", 
+      icon: Icons.check_circle_outline, 
+      textColor: Colors.teal.shade600, 
+      barColor: Colors.teal.shade400, 
+      borderColor: Colors.grey.shade200, 
+      spans: [
+        const TextSpan(text: "Looking good! You have "),
+        TextSpan(
+          text: "RM ${b.remaining.toStringAsFixed(2)}",
+          style: TextStyle(color: Colors.teal.shade600, fontWeight: FontWeight.w900),
+        ),
+        const TextSpan(text: " left."),
+      ],
+    );
   }
 
   IconData _iconForName(String name) {
@@ -545,21 +749,25 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
   int _selectedYear = DateTime.now().year;
   bool _isSaving = false;
   Map<String, List<String>> _errors = {};
-  late List<int> _filterYears;
+
+  List<int> get _filterYears {
+    final currentYear = DateTime.now().year;
+    return List.generate(21, (index) => (currentYear - 10) + index);
+  }
 
   @override
   void initState() {
     super.initState();
-    final currentYear = DateTime.now().year;
-    _filterYears = [currentYear - 1, currentYear, currentYear + 1];
-
     if (widget.editing != null) {
-      _amountController = TextEditingController(text: widget.editing!.amount.toString());
+      _amountController = TextEditingController(text: widget.editing!.amount.toStringAsFixed(2));
       _selectedCategoryId = widget.editing!.category.id;
       _selectedMonth = widget.editing!.month;
       _selectedYear = widget.editing!.year;
     } else {
       _amountController = TextEditingController();
+      if (widget.categories.isNotEmpty) {
+        _selectedCategoryId = widget.categories.first.id;
+      }
     }
   }
 
@@ -570,9 +778,16 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
   }
 
   Future<void> _handleSave() async {
+    if (widget.categories.isEmpty) return;
+
     setState(() { _errors = {}; _isSaving = true; });
     try {
-      final payload = { 'category_id': _selectedCategoryId, 'amount': double.tryParse(_amountController.text.trim()) ?? 0, 'month': _selectedMonth, 'year': _selectedYear };
+      final payload = { 
+        'category_id': _selectedCategoryId, 
+        'amount': double.tryParse(_amountController.text.trim()) ?? 0, 
+        'month': _selectedMonth, 
+        'year': _selectedYear 
+      };
       await widget.onSave(payload);
       if (mounted) Navigator.pop(context);
     } on DioException catch (e) {
@@ -587,14 +802,90 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
     }
   }
 
+  // 🌟 按 Type 进行分组渲染 Dropdown 列表，保证带有干净的标题与纯白背景
+  List<DropdownMenuItem<int>> _buildGroupedCategoryMenuItems(List<CategoryLite> categories) {
+    final Map<String, List<CategoryLite>> groups = {};
+    for (var c in categories) {
+      final typeName = c.typeName;
+      groups.putIfAbsent(typeName, () => []).add(c);
+    }
+
+    final List<DropdownMenuItem<int>> items = [];
+
+    groups.forEach((typeName, catList) {
+      // 1. 分组 Section 标题
+      items.add(
+        DropdownMenuItem<int>(
+          value: -1 * typeName.hashCode,
+          enabled: false,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF7ED),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              typeName.toUpperCase(),
+              style: const TextStyle(
+                color: SunsetColors.primary,
+                fontSize: 10,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.0,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // 2. 该分组下的各个分类
+      for (var c in catList) {
+        final isIncome = c.typeName.toLowerCase().contains('income');
+        items.add(
+          DropdownMenuItem<int>(
+            value: c.id,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(c.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: SunsetColors.dark)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isIncome ? const Color(0xFFECFDF5) : const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: isIncome ? const Color(0xFFA7F3D0) : const Color(0xFFFFEDD5)),
+                    ),
+                    child: Text(
+                      c.typeName.toUpperCase(),
+                      style: TextStyle(
+                        color: isIncome ? const Color(0xFF059669) : SunsetColors.secondary,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+    });
+
+    return items;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final bool hasNoCategories = widget.categories.isEmpty;
+
     return Dialog(
       insetPadding: const EdgeInsets.all(16),
       backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 460, maxHeight: 760),
+        constraints: const BoxConstraints(maxWidth: 460),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -606,12 +897,31 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _label('Category'),
-                    DropdownButtonFormField<int>(
-                      value: _selectedCategoryId,
-                      decoration: _fieldDecoration('Select Category'),
-                      items: widget.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)))).toList(),
-                      onChanged: (val) => setState(() => _selectedCategoryId = val),
-                    ),
+
+                    if (hasNoCategories)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: const Color(0xFFFFFBEB), borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFFDE68A))),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 20),
+                            SizedBox(width: 8),
+                            Expanded(child: Text("No active Category found. Please add a category first.", style: TextStyle(color: Color(0xFF92400E), fontSize: 12, fontWeight: FontWeight.bold))),
+                          ],
+                        ),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        value: _selectedCategoryId,
+                        dropdownColor: Colors.white, // 🌟 修复：背景设为纯白
+                        decoration: _fieldDecoration('Select Category'),
+                        items: _buildGroupedCategoryMenuItems(widget.categories),
+                        onChanged: (val) {
+                          if (val != null && val > 0) {
+                            setState(() => _selectedCategoryId = val);
+                          }
+                        },
+                      ),
                     _errorText('category_id'),
                     
                     const SizedBox(height: 18),
@@ -619,10 +929,7 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
                     TextField(
                       controller: _amountController, 
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      // 🌟 修复：严密控制只能输入数字和小数点
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))],
                       decoration: _fieldDecoration('e.g. 500.00')
                     ),
                     _errorText('amount'),
@@ -630,9 +937,9 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
                     const SizedBox(height: 18),
                     Row(
                       children: [
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [_label('Month'), DropdownButtonFormField<int>(value: _selectedMonth, decoration: _fieldDecoration(''), items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text(_months[i]))), onChanged: (val) => setState(() => _selectedMonth = val!)), _errorText('month')])),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [_label('Month'), DropdownButtonFormField<int>(value: _selectedMonth, dropdownColor: Colors.white, decoration: _fieldDecoration(''), items: List.generate(12, (i) => DropdownMenuItem(value: i + 1, child: Text(_months[i]))), onChanged: (val) => setState(() => _selectedMonth = val!)), _errorText('month')])),
                         const SizedBox(width: 16),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [_label('Year'), DropdownButtonFormField<int>(value: _selectedYear, decoration: _fieldDecoration(''), items: _filterYears.map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(), onChanged: (val) => setState(() => _selectedYear = val!)), _errorText('year')])),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [_label('Year'), DropdownButtonFormField<int>(value: _selectedYear, dropdownColor: Colors.white, decoration: _fieldDecoration(''), items: _filterYears.map((y) => DropdownMenuItem(value: y, child: Text('$y'))).toList(), onChanged: (val) => setState(() => _selectedYear = val!)), _errorText('year')])),
                       ],
                     ),
                   ],
@@ -641,7 +948,7 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
             ),
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10))), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
+              decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10))), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -652,8 +959,8 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
-                    onPressed: _isSaving ? null : _handleSave,
-                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF97316), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    onPressed: (_isSaving || hasNoCategories) ? null : _handleSave,
+                    style: ElevatedButton.styleFrom(backgroundColor: SunsetColors.secondary, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                     child: Row(mainAxisSize: MainAxisSize.min, children: [if (_isSaving) ...[const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)), const SizedBox(width: 8)], Text(_isSaving ? 'Saving...' : 'Save Budget', style: const TextStyle(fontWeight: FontWeight.w800))]),
                   ),
                 ],
@@ -678,8 +985,8 @@ class _BudgetFormDialogState extends State<BudgetFormDialog> {
   InputDecoration _fieldDecoration(String hint) {
     return InputDecoration(
       hintText: hint, filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: const Color(0xFFF97316).withValues(alpha: 0.4))),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFFF97316), width: 1.5)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.80))),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: SunsetColors.primary, width: 1.5)),
     );
   }
 
@@ -709,7 +1016,7 @@ class _BudgetDeleteDialogState extends State<BudgetDeleteDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       insetPadding: const EdgeInsets.all(18), backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: Column(
@@ -743,7 +1050,7 @@ class _BudgetDeleteDialogState extends State<BudgetDeleteDialog> {
             ),
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10))), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12))),
+              decoration: BoxDecoration(color: Colors.grey.shade50, border: Border(top: BorderSide(color: SunsetColors.primary.withValues(alpha: 0.10))), borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -770,7 +1077,67 @@ class _BudgetDeleteDialogState extends State<BudgetDeleteDialog> {
 
 // ---------------- Models & Helpers ----------------
 
-class AiInsight { final String status; final IconData icon; final Color textColor; final Color barColor; final Color borderColor; final String message; AiInsight({required this.status, required this.icon, required this.textColor, required this.barColor, required this.borderColor, required this.message}); }
-class CategoryLite { final int id; final String name; final String icon; final Color color; CategoryLite({required this.id, required this.name, required this.icon, required this.color}); factory CategoryLite.fromJson(Map<String, dynamic> json) { return CategoryLite(id: int.tryParse('${json['id'] ?? 0}') ?? 0, name: '${json['name'] ?? ''}', icon: '${json['icon'] ?? 'Tag'}', color: _colorFromHex('${json['color'] ?? '#f97316'}')); } }
-class BudgetModel { final int id; final CategoryLite category; final double amount; final int month; final int year; final double spent; final double remaining; final double percentage; BudgetModel({required this.id, required this.category, required this.amount, required this.month, required this.year, required this.spent, required this.remaining, required this.percentage}); factory BudgetModel.fromJson(Map<String, dynamic> json) { return BudgetModel(id: int.tryParse('${json['id'] ?? 0}') ?? 0, category: CategoryLite.fromJson(Map<String, dynamic>.from(json['category'] ?? {})), amount: double.tryParse('${json['amount'] ?? 0}') ?? 0.0, month: int.tryParse('${json['month'] ?? 1}') ?? 1, year: int.tryParse('${json['year'] ?? 2024}') ?? 2024, spent: double.tryParse('${json['spent'] ?? 0}') ?? 0.0, remaining: double.tryParse('${json['remaining'] ?? 0}') ?? 0.0, percentage: double.tryParse('${json['percentage'] ?? 0}') ?? 0.0); } }
+class AiInsight { 
+  final String status; 
+  final IconData icon; 
+  final Color textColor; 
+  final Color barColor; 
+  final Color borderColor; 
+  final List<InlineSpan> spans; 
+
+  AiInsight({required this.status, required this.icon, required this.textColor, required this.barColor, required this.borderColor, required this.spans}); 
+}
+
+class CategoryLite { 
+  final int id; 
+  final String name; 
+  final String icon; 
+  final Color color; 
+  final int typeId; 
+  final String typeName;
+
+  CategoryLite({required this.id, required this.name, required this.icon, required this.color, required this.typeId, required this.typeName}); 
+
+  factory CategoryLite.fromJson(Map<String, dynamic> json) { 
+    final typeMap = json['type'] is Map ? json['type'] : {};
+    final tName = '${typeMap['name'] ?? ''}';
+    final tId = int.tryParse('${json['type_id'] ?? typeMap['id'] ?? 1}') ?? 1;
+
+    return CategoryLite(
+      id: int.tryParse('${json['id'] ?? 0}') ?? 0, 
+      name: '${json['name'] ?? ''}', 
+      icon: '${json['icon'] ?? 'Tag'}', 
+      color: _colorFromHex('${json['color'] ?? '#f97316'}'),
+      typeId: tId,
+      typeName: tName.isNotEmpty ? tName : (tId == 2 ? 'Income' : 'Expense'),
+    ); 
+  } 
+}
+
+class BudgetModel { 
+  final int id; 
+  final CategoryLite category; 
+  final double amount; 
+  final int month; 
+  final int year; 
+  final double spent; 
+  final double remaining; 
+  final double percentage; 
+
+  BudgetModel({required this.id, required this.category, required this.amount, required this.month, required this.year, required this.spent, required this.remaining, required this.percentage}); 
+
+  factory BudgetModel.fromJson(Map<String, dynamic> json) { 
+    return BudgetModel(
+      id: int.tryParse('${json['id'] ?? 0}') ?? 0, 
+      category: CategoryLite.fromJson(Map<String, dynamic>.from(json['category'] ?? {})), 
+      amount: double.tryParse('${json['amount'] ?? 0}') ?? 0.0, 
+      month: int.tryParse('${json['month'] ?? 1}') ?? 1, 
+      year: int.tryParse('${json['year'] ?? DateTime.now().year}') ?? DateTime.now().year, 
+      spent: double.tryParse('${json['spent'] ?? 0}') ?? 0.0, 
+      remaining: double.tryParse('${json['remaining'] ?? 0}') ?? 0.0, 
+      percentage: double.tryParse('${json['percentage'] ?? 0}') ?? 0.0
+    ); 
+  } 
+}
+
 Color _colorFromHex(String value) { final cleaned = value.replaceAll('#', '').trim(); final hex = cleaned.length == 6 ? 'FF$cleaned' : cleaned; return Color(int.tryParse(hex, radix: 16) ?? 0xFFF97316); }
