@@ -75,14 +75,20 @@ function getDaysLeftText(year: number, month: number) {
   return daysLeft === 0 ? "Last day" : `${daysLeft} days left`;
 }
 
-// 🌟 AI 分析状态算法 (包含超出金额精确计算)
-function getAiInsight(b: Budget) {
+// 🌟 AI 分析状态算法 (超出的金额采用鲜艳纯红字强显)
+function getAiInsight(b: Budget): {
+  status: string;
+  icon: any;
+  colorClass: string;
+  bgClass: string;
+  cardClass: string;
+  message: React.ReactNode;
+} {
   const remainingRatio = 100 - b.percentage;
   const daysLeftText = getDaysLeftText(b.year, b.month);
   const catName = b.category?.name || "this category";
   const overAmount = Math.max(0, b.spent - b.amount);
 
-  // 1. 超出预算：明确提示超出了多少金额
   if (b.percentage >= 100) {
     return {
       status: "Over Budget",
@@ -90,7 +96,15 @@ function getAiInsight(b: Budget) {
       colorClass: "text-red-600",
       bgClass: "bg-red-500",
       cardClass: "border-red-200 bg-white hover:border-red-300",
-      message: `You've exceeded your ${catName} budget limit by RM ${overAmount.toFixed(2)}! Please stop spending.`,
+      message: (
+        <span>
+          You've exceeded your {catName} budget limit by{" "}
+          <strong className="text-red-600 font-black">
+            RM {overAmount.toFixed(2)}
+          </strong>
+          ! Please stop spending.
+        </span>
+      ),
     };
   }
   
@@ -101,7 +115,15 @@ function getAiInsight(b: Budget) {
       colorClass: "text-red-500",
       bgClass: "bg-red-500",
       cardClass: "border-red-200 bg-white hover:border-red-300",
-      message: `Only ${remainingRatio.toFixed(1)}% remaining! You've spent RM ${b.spent.toFixed(2)} with ${daysLeftText}.`,
+      message: (
+        <span>
+          Only {remainingRatio.toFixed(1)}% remaining! You've spent{" "}
+          <strong className="text-red-600 font-black">
+            RM {b.spent.toFixed(2)}
+          </strong>{" "}
+          with {daysLeftText}.
+        </span>
+      ),
     };
   }
 
@@ -112,7 +134,11 @@ function getAiInsight(b: Budget) {
       colorClass: "text-amber-500",
       bgClass: "bg-amber-400",
       cardClass: "border-amber-200 bg-white hover:border-amber-300",
-      message: `You're halfway through your ${catName} limit. Keep an eye on expenses for the next ${daysLeftText}.`,
+      message: (
+        <span>
+          You're halfway through your {catName} limit. Keep an eye on expenses for the next {daysLeftText}.
+        </span>
+      ),
     };
   }
 
@@ -122,7 +148,15 @@ function getAiInsight(b: Budget) {
     colorClass: "text-emerald-500",
     bgClass: "bg-emerald-400",
     cardClass: "border-gray-100 bg-white hover:border-emerald-200",
-    message: `Looking good! You have RM ${b.remaining.toFixed(2)} left with ${daysLeftText}.`,
+    message: (
+      <span>
+        Looking good! You have{" "}
+        <strong className="text-emerald-600 font-black">
+          RM {b.remaining.toFixed(2)}
+        </strong>{" "}
+        left with {daysLeftText}.
+      </span>
+    ),
   };
 }
 
@@ -210,7 +244,7 @@ export default function BudgetPage() {
   useEffect(() => { fetchCategories(); }, [fetchCategories]);
   useEffect(() => { fetchBudgets(); }, [fetchBudgets]);
 
-  // 按 Category 的 Type 动态分组
+  // 按 Category 的 Type 动态分组展示
   const groupedBudgets = useMemo(() => {
     const groups: { [key: string]: { typeName: string; items: Budget[] } } = {};
 
@@ -539,10 +573,10 @@ export default function BudgetPage() {
             </select>
           </div>
 
-          {/* 清空过滤器按键 */}
+          {/* 🌟 核心改进 1：清空过滤器按键 (完全对齐 Refresh 按钮的设计与颜色) */}
           <button 
             onClick={handleClearFilters}
-            className="w-10 h-10 rounded-2xl bg-red-50 hover:bg-red-100 shadow-sm border border-red-200 flex items-center justify-center text-red-500 transition-colors shrink-0"
+            className="w-10 h-10 rounded-2xl bg-white shadow-sm border border-orange-500/80 flex items-center justify-center text-sunset-dark hover:bg-gray-50 transition-colors shrink-0"
             title="Clear Month & Year Filters"
           >
             <FilterX size={18} />
@@ -654,7 +688,6 @@ export default function BudgetPage() {
                           </span>
                         </div>
 
-                        {/* 动态进度条 */}
                         <div className="h-2.5 w-full bg-black/5 rounded-full mb-3 overflow-hidden">
                           <div 
                             className={`h-full rounded-full transition-all duration-1000 ease-out ${insight.bgClass}`}
@@ -662,7 +695,7 @@ export default function BudgetPage() {
                           />
                         </div>
 
-                        {/* 🌟 核心修改：超支时显示具体超支金额 (RM XXX over limit) */}
+                        {/* 进度条下方提醒：超支金额采用鲜艳常亮红字 */}
                         <div className="flex justify-between items-center text-xs font-semibold text-gray-500 mb-6">
                           <span>{b.percentage.toFixed(0)}% Used · {daysLeftText}</span>
                           {isOver ? (
