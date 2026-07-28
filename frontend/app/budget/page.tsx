@@ -75,12 +75,14 @@ function getDaysLeftText(year: number, month: number) {
   return daysLeft === 0 ? "Last day" : `${daysLeft} days left`;
 }
 
-// AI 分析状态算法
+// 🌟 AI 分析状态算法 (包含超出金额精确计算)
 function getAiInsight(b: Budget) {
   const remainingRatio = 100 - b.percentage;
   const daysLeftText = getDaysLeftText(b.year, b.month);
   const catName = b.category?.name || "this category";
+  const overAmount = Math.max(0, b.spent - b.amount);
 
+  // 1. 超出预算：明确提示超出了多少金额
   if (b.percentage >= 100) {
     return {
       status: "Over Budget",
@@ -88,7 +90,7 @@ function getAiInsight(b: Budget) {
       colorClass: "text-red-600",
       bgClass: "bg-red-500",
       cardClass: "border-red-200 bg-white hover:border-red-300",
-      message: `You've exceeded your ${catName} budget! Please stop spending.`,
+      message: `You've exceeded your ${catName} budget limit by RM ${overAmount.toFixed(2)}! Please stop spending.`,
     };
   }
   
@@ -208,7 +210,7 @@ export default function BudgetPage() {
   useEffect(() => { fetchCategories(); }, [fetchCategories]);
   useEffect(() => { fetchBudgets(); }, [fetchBudgets]);
 
-  // 按 Category 的 Type 自动分组展示页面上的卡片
+  // 按 Category 的 Type 动态分组
   const groupedBudgets = useMemo(() => {
     const groups: { [key: string]: { typeName: string; items: Budget[] } } = {};
 
@@ -228,7 +230,7 @@ export default function BudgetPage() {
     return Object.values(groups);
   }, [budgets]);
 
-  // 🌟 核心：专门为下拉 Select 控件做按 Type 分组数据处理
+  // 下拉 Select 控件按 Type 分组数据处理
   const groupedCategoriesForSelect = useMemo(() => {
     const groups: { [key: string]: { typeName: string; items: Category[] } } = {};
 
@@ -324,7 +326,6 @@ export default function BudgetPage() {
     }
   };
 
-  // 🌟 重置月份和年份过滤器
   const handleClearFilters = () => {
     setSelectedMonth("all");
     setSelectedYear("all");
@@ -355,7 +356,7 @@ export default function BudgetPage() {
 
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-5">
               
-              {/* 🌟 Category 下拉框：按照 Type 分组，并且带有带颜色的圆角背景 Badge */}
+              {/* Category 下拉框 */}
               <div>
                 <div className="flex items-center justify-between pl-1 mb-1.5">
                   <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest block">Category</label>
@@ -389,7 +390,6 @@ export default function BudgetPage() {
                         <React.Fragment key={group.typeName}>
                           {groupIdx > 0 && <SelectSeparator />}
                           <SelectGroup>
-                            {/* 🌟 按 Type 区分的 Section Title */}
                             <SelectLabel className="text-[10px] font-black text-orange-600 uppercase tracking-widest px-3 py-1.5 bg-orange-50/60 rounded-md my-1">
                               {group.typeName}
                             </SelectLabel>
@@ -405,7 +405,6 @@ export default function BudgetPage() {
                                        <span className="font-bold text-sunset-dark">{c.name}</span>
                                     </div>
                                     
-                                    {/* 🌟 核心：带有颜色的 Category Type 胶囊 Badge */}
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider shrink-0 ${
                                       isIncome
                                         ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60'
@@ -540,7 +539,7 @@ export default function BudgetPage() {
             </select>
           </div>
 
-          {/* 🌟 新增：清空过滤器按钮 (Clear Filter Button) */}
+          {/* 清空过滤器按键 */}
           <button 
             onClick={handleClearFilters}
             className="w-10 h-10 rounded-2xl bg-red-50 hover:bg-red-100 shadow-sm border border-red-200 flex items-center justify-center text-red-500 transition-colors shrink-0"
@@ -600,6 +599,8 @@ export default function BudgetPage() {
                     const StatusIcon = insight.icon;
                     const daysLeftText = getDaysLeftText(b.year, b.month);
                     const typeName = b.category?.type?.name || (String(b.category?.type_id) === '2' ? 'Income' : 'Expense');
+                    const isOver = b.spent > b.amount;
+                    const overAmount = Math.max(0, b.spent - b.amount);
 
                     return (
                       <Card 
@@ -653,6 +654,7 @@ export default function BudgetPage() {
                           </span>
                         </div>
 
+                        {/* 动态进度条 */}
                         <div className="h-2.5 w-full bg-black/5 rounded-full mb-3 overflow-hidden">
                           <div 
                             className={`h-full rounded-full transition-all duration-1000 ease-out ${insight.bgClass}`}
@@ -660,9 +662,16 @@ export default function BudgetPage() {
                           />
                         </div>
 
+                        {/* 🌟 核心修改：超支时显示具体超支金额 (RM XXX over limit) */}
                         <div className="flex justify-between items-center text-xs font-semibold text-gray-500 mb-6">
                           <span>{b.percentage.toFixed(0)}% Used · {daysLeftText}</span>
-                          <span>RM {Math.max(b.remaining, 0).toFixed(2)} left</span>
+                          {isOver ? (
+                            <span className="text-red-600 font-extrabold animate-pulse">
+                              RM {overAmount.toFixed(2)} over limit
+                            </span>
+                          ) : (
+                            <span>RM {Math.max(b.remaining, 0).toFixed(2)} left</span>
+                          )}
                         </div>
 
                         <div className="flex items-start gap-3">
