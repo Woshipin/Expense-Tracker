@@ -4,10 +4,10 @@ import {
   LayoutDashboard, ReceiptText, PieChart, Settings, LogOut,
   Calendar, DollarSign, BarChart3, ChevronLeft,
   ChevronRight, Tags, CreditCard, Users, Loader2, Layers,
-  ChevronDown, ChevronUp, User
+  ChevronDown, ChevronUp, User, X
 } from 'lucide-react';
 import React, { useState, useEffect } from "react";
-import { Modal, Button, Toast } from "@/components/ui";
+import { Button, Toast } from "@/components/ui";
 import api, { findWorkingApiURL } from "@/lib/axios";
 
 export default function SidebarLayout({ children }: { children: React.ReactNode }) {
@@ -144,9 +144,8 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
   const isActive = (id: string) => safePathname === id || (safePathname.startsWith(id) && id !== '/');
   
-  // 权限判断：管理员权限 (0: SuperAdmin, 1: Admin)
   const canSeeUsers = Number(user?.role) === 0 || Number(user?.role) === 1;
-  const canSeeTypes = Number(user?.role) === 0 || Number(user?.role) === 1; // 🌟 仅管理员可见 Types
+  const canSeeTypes = Number(user?.role) === 0 || Number(user?.role) === 1;
 
   const desktopNavItems = [
     { id: '/dashboard',   label: 'Dashboard',   icon: LayoutDashboard, show: true },
@@ -156,11 +155,10 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
     { id: '/budget',      label: 'Budget',      icon: PieChart,        show: true },
   ];
 
-  // Transactions 下拉子菜单 (通过 show: canSeeTypes 过滤 Types)
   const transactionSubItems = [
     { id: '/expenses',        label: 'Expenses',        icon: ReceiptText, show: true },
     { id: '/income',          label: 'Income',          icon: DollarSign,  show: true },
-    { id: '/types',           label: 'Types',           icon: Layers,      show: canSeeTypes }, // 🌟 条件渲染
+    { id: '/types',           label: 'Types',           icon: Layers,      show: canSeeTypes },
     { id: '/categories',      label: 'Categories',      icon: Tags,        show: true },
     { id: '/payment-methods', label: 'Payment Methods', icon: CreditCard,  show: true },
   ];
@@ -494,15 +492,44 @@ export default function SidebarLayout({ children }: { children: React.ReactNode 
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <Modal isOpen={isLogoutModalOpen} onClose={() => setIsLogoutModalOpen(false)} title="Confirm Logout">
-        <div className="space-y-4">
-          <p className="font-medium text-sunset-dark">Are you sure you want to log out of your account?</p>
-          <div className="flex flex-col sm:flex-row justify-end pt-4 gap-3">
-            <Button variant="ghost" onClick={() => setIsLogoutModalOpen(false)}>Cancel</Button>
-            <Button variant="danger" onClick={handleLogout}>Logout</Button>
+      {/* 🌟 核心改进：精美、自适应居中的 Logout 小卡片弹窗 (移动端/桌面端统一不再全屏) */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-sunset-dark/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl flex flex-col gap-4 animate-in zoom-in-95 duration-200 border border-orange-100">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="text-lg font-black text-sunset-dark">Confirm Logout</h3>
+              <button 
+                onClick={() => setIsLogoutModalOpen(false)} 
+                className="p-1.5 hover:bg-gray-100 rounded-full text-gray-400 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <p className="text-sm font-semibold text-sunset-dark/70 my-1">
+              Are you sure you want to log out of your account?
+            </p>
+            
+            <div className="flex items-center gap-3 pt-2">
+              <Button 
+                variant="ghost" 
+                onClick={() => setIsLogoutModalOpen(false)} 
+                className="flex-1 text-sm h-11 border border-gray-200 bg-white hover:bg-gray-50 shadow-sm rounded-xl font-bold"
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="danger" 
+                onClick={handleLogout} 
+                className="flex-1 text-sm h-11 shadow-md rounded-xl font-bold bg-red-500 hover:bg-red-600 text-white"
+              >
+                Logout
+              </Button>
+            </div>
           </div>
         </div>
-      </Modal>
+      )}
+
     </div>
   );
 }

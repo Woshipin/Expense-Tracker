@@ -666,7 +666,7 @@ export default function BudgetPage() {
                         <div className="flex justify-between items-center text-xs font-semibold text-gray-500 mb-6">
                           <span>{b.percentage.toFixed(0)}% Used · {daysLeftText}</span>
                           {isOver ? (
-                            <span className="text-red-600 font-extrabold animate-pulse">
+                            <span className="text-red-600 font-black tracking-wide">
                               RM {overAmount.toFixed(2)} over limit
                             </span>
                           ) : (
