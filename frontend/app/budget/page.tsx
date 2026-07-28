@@ -3,8 +3,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { Card, Button, Input, Toast } from "@/components/ui";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Edit2, Trash2, RefreshCw, CheckCircle, AlertCircle, AlertTriangle, Loader2, X, ArrowRight } from "lucide-react";
+import { 
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel, 
+  SelectSeparator, SelectTrigger, SelectValue 
+} from "@/components/ui/select";
+import { 
+  Plus, Edit2, Trash2, RefreshCw, CheckCircle, AlertCircle, 
+  AlertTriangle, Loader2, X, ArrowRight, FilterX 
+} from "lucide-react";
 import * as Icons from "lucide-react";
 import api from "@/lib/axios";
 
@@ -152,7 +158,7 @@ export default function BudgetPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 🌟 动态计算：前 10 年至后 10 年的年份数组 (例如 2016 - 2036)
+  // 动态计算前 10 年至后 10 年的年份数组
   const filterYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const list = [];
@@ -202,7 +208,7 @@ export default function BudgetPage() {
   useEffect(() => { fetchCategories(); }, [fetchCategories]);
   useEffect(() => { fetchBudgets(); }, [fetchBudgets]);
 
-  // 按 Category 的 Type 动态分组
+  // 按 Category 的 Type 自动分组展示页面上的卡片
   const groupedBudgets = useMemo(() => {
     const groups: { [key: string]: { typeName: string; items: Budget[] } } = {};
 
@@ -221,6 +227,26 @@ export default function BudgetPage() {
 
     return Object.values(groups);
   }, [budgets]);
+
+  // 🌟 核心：专门为下拉 Select 控件做按 Type 分组数据处理
+  const groupedCategoriesForSelect = useMemo(() => {
+    const groups: { [key: string]: { typeName: string; items: Category[] } } = {};
+
+    categories.forEach((c) => {
+      const typeName = c.type?.name || (String(c.type_id) === '2' ? 'Income' : 'Expense');
+      const key = typeName.toLowerCase();
+
+      if (!groups[key]) {
+        groups[key] = {
+          typeName: typeName,
+          items: [],
+        };
+      }
+      groups[key].items.push(c);
+    });
+
+    return Object.values(groups);
+  }, [categories]);
 
   const openAdd = () => {
     setErrors({});
@@ -298,6 +324,13 @@ export default function BudgetPage() {
     }
   };
 
+  // 🌟 重置月份和年份过滤器
+  const handleClearFilters = () => {
+    setSelectedMonth("all");
+    setSelectedYear("all");
+    showToast("Filters reset to default", "success");
+  };
+
   const handleReanalyze = async () => {
     setAnalyzing(true);
     await new Promise(r => setTimeout(r, 1200));
@@ -322,7 +355,7 @@ export default function BudgetPage() {
 
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-5">
               
-              {/* Category 下拉预警框 */}
+              {/* 🌟 Category 下拉框：按照 Type 分组，并且带有带颜色的圆角背景 Badge */}
               <div>
                 <div className="flex items-center justify-between pl-1 mb-1.5">
                   <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest block">Category</label>
@@ -351,17 +384,41 @@ export default function BudgetPage() {
                     <SelectTrigger className="bg-white rounded-xl h-11 text-sm font-medium border-orange-500/80 hover:border-orange-500 text-sunset-dark shadow-sm">
                       <SelectValue placeholder="Select Category" />
                     </SelectTrigger>
-                    <SelectContent className="z-[10050]">
-                      {categories.map(c => (
-                        <SelectItem key={c.id} value={String(c.id)}>
-                          <div className="flex items-center gap-2">
-                             <DynamicIcon name={c.icon} size={14} style={{ color: c.color }} />
-                             <span>{c.name}</span>
-                             <span className="text-[10px] text-gray-400 font-normal">
-                               ({c.type?.name || (String(c.type_id) === '2' ? 'Income' : 'Expense')})
-                             </span>
-                          </div>
-                        </SelectItem>
+                    <SelectContent className="z-[10050] max-h-80">
+                      {groupedCategoriesForSelect.map((group, groupIdx) => (
+                        <React.Fragment key={group.typeName}>
+                          {groupIdx > 0 && <SelectSeparator />}
+                          <SelectGroup>
+                            {/* 🌟 按 Type 区分的 Section Title */}
+                            <SelectLabel className="text-[10px] font-black text-orange-600 uppercase tracking-widest px-3 py-1.5 bg-orange-50/60 rounded-md my-1">
+                              {group.typeName}
+                            </SelectLabel>
+                            {group.items.map((c) => {
+                              const typeName = c.type?.name || (String(c.type_id) === '2' ? 'Income' : 'Expense');
+                              const isIncome = typeName.toLowerCase().includes('income');
+
+                              return (
+                                <SelectItem key={c.id} value={String(c.id)}>
+                                  <div className="flex items-center justify-between gap-3 w-full pr-1">
+                                    <div className="flex items-center gap-2">
+                                       <DynamicIcon name={c.icon} size={14} style={{ color: c.color }} />
+                                       <span className="font-bold text-sunset-dark">{c.name}</span>
+                                    </div>
+                                    
+                                    {/* 🌟 核心：带有颜色的 Category Type 胶囊 Badge */}
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider shrink-0 ${
+                                      isIncome
+                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60'
+                                        : 'bg-orange-50 text-orange-600 border border-orange-200/60'
+                                    }`}>
+                                      {typeName}
+                                    </span>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectGroup>
+                        </React.Fragment>
                       ))}
                     </SelectContent>
                   </Select>
@@ -462,6 +519,7 @@ export default function BudgetPage() {
         </div>
         
         <div className="flex items-center gap-3 flex-wrap">
+          {/* 月份 & 年份过滤器 */}
           <div className="flex items-center gap-2 bg-white border border-orange-500/80 rounded-2xl px-4 py-2 shadow-sm">
             <select
               value={selectedMonth}
@@ -482,6 +540,16 @@ export default function BudgetPage() {
             </select>
           </div>
 
+          {/* 🌟 新增：清空过滤器按钮 (Clear Filter Button) */}
+          <button 
+            onClick={handleClearFilters}
+            className="w-10 h-10 rounded-2xl bg-red-50 hover:bg-red-100 shadow-sm border border-red-200 flex items-center justify-center text-red-500 transition-colors shrink-0"
+            title="Clear Month & Year Filters"
+          >
+            <FilterX size={18} />
+          </button>
+
+          {/* 重新分析 AI 按键 */}
           <button 
             onClick={handleReanalyze} 
             disabled={analyzing}
