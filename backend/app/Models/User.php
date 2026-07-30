@@ -14,7 +14,7 @@ class User extends Authenticatable implements JWTSubject
 {
     use HasFactory, Notifiable, SoftDeletes;
 
-    // 角色常量定义
+    // 角色常量定义 (0 为最高管理员)
     public const ROLE_SUPER_ADMIN = 0;
     public const ROLE_ADMIN       = 1;
     public const ROLE_PREMIUM     = 2;
@@ -68,26 +68,31 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * 🌟 访问器：汇总当前用户所在组的权限；若尚未分配权限组，开通除了 Permissions, Users, Types 之外的全部默认功能
+     * 🌟 核心控制访问器：
+     * 1. 刚注册 / 未加入任何权限组的新账号：默认开通除 Users、Types、Permissions 外的所有功能！
+     * 2. 已加入权限组的账号：严格按照关联的 Permission Group 打勾节点生效。
+     * 3. Super Admin (Role 0)：保底拥有 Permissions 页面管理权。
      */
     public function getPermissionsAttribute(): array
     {
         $groups = $this->permissionGroups()->get();
         $permissions = [];
 
-        // 1. 如果用户已加入自定义权限组，汇总组内打勾项
+        // 汇总已加入的权限组打勾节点
         foreach ($groups as $group) {
             if (is_array($group->permissions)) {
                 $permissions = array_merge($permissions, $group->permissions);
             }
         }
 
-        // 🌟 2. 核心规则：若账号尚未被分配任何权限组，默认开放除了 Permissions, Users, Types 之外的全部功能与页面！
+        // 🌟【新注册/未配置账号默认权限策略】：
+        // 如果账号尚未被拉入任何权限组，默认开放除了 Users、Types、Permissions 之外的全部页面和功能！
         if ($groups->isEmpty()) {
             $permissions = [
-                // 1. Dashboard & AI 智能分析
+                // 1. Dashboard & AI 智能分析 (含 Chatbot)
                 'dashboard.view',
                 'ai_insights.view',
+                'ai_insights.chat',
 
                 // 2. Expenses 支出管理 (包含查看、新增、编辑、删除、AI扫码全部功能)
                 'expenses.view',
@@ -104,20 +109,26 @@ class User extends Authenticatable implements JWTSubject
 
                 // 4. Calendar 日历流 (全部功能)
                 'calendar.view',
+                'calendar.create',
+                'calendar.edit',
+                'calendar.delete',
                 'calendar.manage',
 
                 // 5. Budget 预算中心 (全部功能)
                 'budget.view',
+                'budget.create',
+                'budget.edit',
+                'budget.delete',
                 'budget.manage',
 
-                // 6. Categories 分类管理 (全部功能)
+                // 6. Categories 分类配置 (全部功能)
                 'categories.view',
                 'categories.create',
                 'categories.edit',
                 'categories.delete',
                 'categories.manage',
 
-                // 7. Payment Methods 支付方式管理 (全部功能)
+                // 7. Payment Methods 支付渠道 (全部功能)
                 'payment_methods.view',
                 'payment_methods.create',
                 'payment_methods.edit',
@@ -126,7 +137,7 @@ class User extends Authenticatable implements JWTSubject
             ];
         }
 
-        // 🌟 3. 保底规则：Super Admin (Role 0) 始终保留 Permissions 页面访问与管理权，防止锁死
+        // 🌟 保底规则：Super Admin (Role 0) 始终保留 Permissions 页面访问与管理权
         if ((int)$this->role === self::ROLE_SUPER_ADMIN) {
             $permissions[] = 'permissions.view';
             $permissions[] = 'permissions.manage';
