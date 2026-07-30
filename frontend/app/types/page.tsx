@@ -5,8 +5,11 @@ import { Card, Button, Input, Toast } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, Layers } from "lucide-react";
 import api from "@/lib/axios";
+import { usePermission } from "@/hooks/usePermission"; // 🌟 引入权限 Hook
 
 export default function TypesPage() {
+  const { can } = usePermission(); // 🌟 调取权限判断能力
+
   const [types, setTypes] = useState<any[]>([]);
   const [toast, setToast] = useState<{message:string, type:'success'|'error'|'warning'}|null>(null);
   
@@ -244,11 +247,15 @@ export default function TypesPage() {
             <h1 className="text-2xl font-bold text-sunset-dark">Transaction Types</h1>
             <p className="text-sm font-semibold text-sunset-dark/60 mt-1">Manage global transaction types (e.g. Income, Expense).</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600 rounded-xl">
-              <Plus size={16} className="mr-1.5 shrink-0" /> Add Type
-            </Button>
-          </div>
+          
+          {/* 🌟 只有打勾了 types.create 权限，才显示 + Add Type 按钮 */}
+          {can("types.create") && (
+            <div className="flex items-center gap-2">
+              <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600 rounded-xl">
+                <Plus size={16} className="mr-1.5 shrink-0" /> Add Type
+              </Button>
+            </div>
+          )}
         </header>
 
         {/* Toolbar */}
@@ -292,12 +299,21 @@ export default function TypesPage() {
                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm bg-orange-50 text-orange-500">
                      <Layers size={20} />
                    </div>
-                   {/* 操作按钮 (常驻，不再 hover 隐藏) */}
-                   <div className="flex gap-1.5">
-                     <button onClick={() => setViewingType(t)} className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Eye size={14}/></button>
-                     <button onClick={() => openEditModal(t)} className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"><Edit2 size={14}/></button>
-                     <button onClick={() => setDeletingType(t)} className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14}/></button>
-                   </div>
+                   
+                   {/* 🌟 只有拥有 View/Edit/Delete 权限才按需渲染 */}
+                   {(can("types.view") || can("types.edit") || can("types.delete")) && (
+                     <div className="flex gap-1.5">
+                       {can("types.view") && (
+                         <button onClick={() => setViewingType(t)} className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="View"><Eye size={14}/></button>
+                       )}
+                       {can("types.edit") && (
+                         <button onClick={() => openEditModal(t)} className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 transition-colors" title="Edit"><Edit2 size={14}/></button>
+                       )}
+                       {can("types.delete") && (
+                         <button onClick={() => setDeletingType(t)} className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-50 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete"><Trash2 size={14}/></button>
+                       )}
+                     </div>
+                   )}
                 </div>
 
                 <div>

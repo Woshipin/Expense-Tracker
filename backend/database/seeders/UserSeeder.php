@@ -28,7 +28,7 @@ class UserSeeder extends Seeder
             [
                 'id'                => 2,
                 'full_name'         => 'Admin',
-                'email'             => 'admin@sunset.com',
+                'email'             => 'admin@gmail.com',
                 'password'          => Hash::make('Pin@776253'), // 直接填入
                 'role'              => 1, // 1: Admin
                 'status'            => 1, // 1: Active

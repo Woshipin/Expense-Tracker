@@ -12,6 +12,7 @@ use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\TypeController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PermissionGroupController; // 🌟 必须加上这一行！
 
 // 公开路由 (无需鉴权)
 Route::post('/register', [AuthController::class, 'register']);
@@ -50,6 +51,13 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/users', [UserController::class, 'store']);         // 新增用户 (增)
     Route::put('/users/{id}', [UserController::class, 'update']);    // 更新用户 (改)
     Route::delete('/users/{id}', [UserController::class, 'destroy']); // 删除用户 (删)
+
+    // 🌟【新增】Permission Groups 权限组管理路由 (仅限 Super Admin 访问)
+    Route::get('/permission-groups', [PermissionGroupController::class, 'index']);          // 获取权限组列表
+    Route::post('/permission-groups', [PermissionGroupController::class, 'store']);         // 新增权限组
+    Route::get('/permission-groups/{id}', [PermissionGroupController::class, 'show']);      // 获取单个权限组详情
+    Route::put('/permission-groups/{id}', [PermissionGroupController::class, 'update']);    // 修改权限组及绑定的用户
+    Route::delete('/permission-groups/{id}', [PermissionGroupController::class, 'destroy']); // 删除权限组
 
     // 支付方式管理路由 (显式单条配置)
     Route::get('/payment-methods', [PaymentMethodController::class, 'index']);          // 获取/搜索列表

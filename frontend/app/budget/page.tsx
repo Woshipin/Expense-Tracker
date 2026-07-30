@@ -13,8 +13,8 @@ import {
 } from "lucide-react";
 import * as Icons from "lucide-react";
 import api from "@/lib/axios";
+import { usePermission } from "@/hooks/usePermission";
 
-// 动态图标组件
 const DynamicIcon = ({ name, className, style, size = 20 }: { name: string; className?: string; style?: React.CSSProperties, size?: number }) => {
   const IconComponent = (Icons as any)[name] || Icons.Tag;
   return <IconComponent className={className} style={style} size={size} />;
@@ -56,7 +56,6 @@ function extractArray(data: unknown): any[] {
   return [];
 }
 
-// 帮助函数：计算剩余天数
 function getDaysLeftText(year: number, month: number) {
   const now = new Date();
   const currentYear = now.getFullYear();
@@ -75,7 +74,6 @@ function getDaysLeftText(year: number, month: number) {
   return daysLeft === 0 ? "Last day" : `${daysLeft} days left`;
 }
 
-// 🌟 AI 分析状态算法 (不同 Status 下金额数字渲染不同颜色)
 function getAiInsight(b: Budget): {
   status: string;
   icon: any;
@@ -89,7 +87,6 @@ function getAiInsight(b: Budget): {
   const catName = b.category?.name || "this category";
   const overAmount = Math.max(0, b.spent - b.amount);
 
-  // 1. 超出预算：红色数字
   if (b.percentage >= 100) {
     return {
       status: "Over Budget",
@@ -109,7 +106,6 @@ function getAiInsight(b: Budget): {
     };
   }
   
-  // 2. 危险警告：红色数字
   if (remainingRatio <= 20) {
     return {
       status: "Warning",
@@ -129,7 +125,6 @@ function getAiInsight(b: Budget): {
     };
   }
 
-  // 3. 注意观察：黄色数字
   if (remainingRatio <= 50) {
     return {
       status: "Watch It",
@@ -149,7 +144,6 @@ function getAiInsight(b: Budget): {
     };
   }
 
-  // 4. 健康状态：翡翠绿数字
   return {
     status: "On Track",
     icon: CheckCircle,
@@ -169,6 +163,8 @@ function getAiInsight(b: Budget): {
 }
 
 export default function BudgetPage() {
+  const { can } = usePermission();
+
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "warning" } | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -202,7 +198,6 @@ export default function BudgetPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 动态计算前 10 年至后 10 年的年份数组
   const filterYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const list = [];
@@ -241,7 +236,6 @@ export default function BudgetPage() {
         percentage: Number(b.percentage) || 0,
       }));
 
-      // 🌟 核心算法：按与当前时间的绝对距离升序排序 (越接近当月的排在最上面)
       const currentMonthVal = now.getFullYear() * 12 + (now.getMonth() + 1);
       safeBudgets.sort((a, b) => {
         const valA = a.year * 12 + a.month;
@@ -267,7 +261,6 @@ export default function BudgetPage() {
   useEffect(() => { fetchCategories(); }, [fetchCategories]);
   useEffect(() => { fetchBudgets(); }, [fetchBudgets]);
 
-  // 按 Category 的 Type 动态分组展示
   const groupedBudgets = useMemo(() => {
     const groups: { [key: string]: { typeName: string; items: Budget[] } } = {};
 
@@ -287,7 +280,6 @@ export default function BudgetPage() {
     return Object.values(groups);
   }, [budgets]);
 
-  // 下拉 Select 控件按 Type 分组数据处理
   const groupedCategoriesForSelect = useMemo(() => {
     const groups: { [key: string]: { typeName: string; items: Category[] } } = {};
 
@@ -412,8 +404,6 @@ export default function BudgetPage() {
             </div>
 
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-5">
-              
-              {/* Category 下拉框 */}
               <div>
                 <div className="flex items-center justify-between pl-1 mb-1.5">
                   <label className="text-xs font-extrabold text-sunset-dark/70 tracking-widest block">Category</label>
@@ -575,7 +565,6 @@ export default function BudgetPage() {
         </div>
         
         <div className="flex items-center gap-3 flex-wrap">
-          {/* 月份 & 年份过滤器 */}
           <div className="flex items-center gap-2 bg-white border border-orange-500/80 rounded-2xl px-4 py-2 shadow-sm">
             <select
               value={selectedMonth}
@@ -596,7 +585,6 @@ export default function BudgetPage() {
             </select>
           </div>
 
-          {/* 清空过滤器按键 */}
           <button 
             onClick={handleClearFilters}
             className="w-10 h-10 rounded-2xl bg-white shadow-sm border border-orange-500/80 flex items-center justify-center text-sunset-dark hover:bg-gray-50 transition-colors shrink-0"
@@ -605,7 +593,6 @@ export default function BudgetPage() {
             <FilterX size={18} />
           </button>
 
-          {/* 重新分析 AI 按键 */}
           <button 
             onClick={handleReanalyze} 
             disabled={analyzing}
@@ -615,13 +602,15 @@ export default function BudgetPage() {
             <RefreshCw size={18} className={`${analyzing ? "animate-spin text-orange-500" : ""}`} />
           </button>
 
-          <Button onClick={openAdd} className="rounded-xl px-5 shadow-md hover:shadow-lg bg-orange-500 hover:bg-orange-600">
-            <Plus size={18} className="mr-2 inline" /> Add Budget
-          </Button>
+          {(can("budget.create") || can("budget.manage")) && (
+            <Button onClick={openAdd} className="rounded-xl px-5 shadow-md hover:shadow-lg bg-orange-500 hover:bg-orange-600">
+              <Plus size={18} className="mr-2 inline" /> Add Budget
+            </Button>
+          )}
         </div>
       </header>
 
-      {/* 预算列表展示 (根据 Category Type 动态分组展示) */}
+      {/* 预算列表展示 */}
       {loading ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[1,2,3,4].map(i => <div key={i} className="h-64 bg-white/40 rounded-3xl animate-pulse shadow-sm" />)}
@@ -633,22 +622,34 @@ export default function BudgetPage() {
           </div>
           <p className="text-sunset-dark/60 font-semibold text-lg">No budgets found</p>
           <p className="text-sm text-sunset-dark/40 mt-1 mb-6">Try changing your filters or create a new one.</p>
-          <Button onClick={openAdd} className="rounded-xl shadow-md bg-orange-500 hover:bg-orange-600">
-            <Plus size={16} className="mr-2 inline" /> Create First Budget
-          </Button>
+
+          {(can("budget.create") || can("budget.manage")) && (
+            <Button onClick={openAdd} className="rounded-xl shadow-md bg-orange-500 hover:bg-orange-600">
+              <Plus size={16} className="mr-2 inline" /> Create First Budget
+            </Button>
+          )}
         </Card>
       ) : (
         <div className="space-y-8">
           {groupedBudgets.map((group) => {
             const isIncome = group.typeName.toLowerCase().includes("income");
-            const headerColor = isIncome ? "text-emerald-600" : "text-red-500";
-            const badgeBg = isIncome ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500";
+            const headerTextColor = isIncome ? "text-emerald-700" : "text-red-600";
+            
+            // 🌟 核心改进：升级分组 Header 徽章样式为带有柔和边框与背景底色的精致 Badge
+            const groupBadgeStyle = isIncome 
+              ? "bg-emerald-50 text-emerald-700 border border-emerald-200/80 shadow-sm" 
+              : "bg-red-50 text-red-600 border border-red-200/80 shadow-sm";
 
             return (
               <div key={group.typeName} className="space-y-4">
-                <h2 className={`text-lg font-black flex items-center gap-2 border-b border-gray-100 pb-2 tracking-wide ${headerColor}`}>
-                  {group.typeName} <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold ${badgeBg}`}>({group.items.length})</span>
-                </h2>
+                <div className="flex items-center justify-between border-b border-gray-200/60 pb-3">
+                  <h2 className={`text-xl font-black flex items-center gap-3 tracking-tight ${headerTextColor}`}>
+                    <span>{group.typeName}</span>
+                    <span className={`text-xs px-3 py-1 rounded-xl font-extrabold border ${groupBadgeStyle}`}>
+                      ({group.items.length})
+                    </span>
+                  </h2>
+                </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-2 gap-6">
                   {group.items.map((b) => {
@@ -676,7 +677,6 @@ export default function BudgetPage() {
                               <div className="flex items-center gap-2 flex-wrap">
                                 <h3 className="font-extrabold text-sunset-dark text-lg truncate">{b.category?.name || "Unknown"}</h3>
                                 
-                                {/* 带有颜色的 Category Type 标签 */}
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider shrink-0 ${
                                   typeName.toLowerCase().includes('income')
                                     ? 'bg-emerald-50 text-emerald-600 border border-emerald-200/60'
@@ -692,14 +692,20 @@ export default function BudgetPage() {
                             </div>
                           </div>
                           
-                          <div className="flex gap-2 shrink-0">
-                            <button onClick={() => openEdit(b)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors bg-white border border-gray-100 shadow-sm">
-                              <Edit2 size={16} />
-                            </button>
-                            <button onClick={() => setDeletingBudget(b)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors bg-white border border-gray-100 shadow-sm">
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
+                          {(can("budget.edit") || can("budget.delete") || can("budget.manage")) && (
+                            <div className="flex gap-2 shrink-0">
+                              {(can("budget.edit") || can("budget.manage")) && (
+                                <button onClick={() => openEdit(b)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors bg-white border border-gray-100 shadow-sm" title="Edit Budget">
+                                  <Edit2 size={16} />
+                                </button>
+                              )}
+                              {(can("budget.delete") || can("budget.manage")) && (
+                                <button onClick={() => setDeletingBudget(b)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors bg-white border border-gray-100 shadow-sm" title="Delete Budget">
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-baseline gap-2 mb-3">
@@ -718,7 +724,6 @@ export default function BudgetPage() {
                           />
                         </div>
 
-                        {/* 🌟 进度条下方提醒：超支金额采用鲜艳常亮红字 */}
                         <div className="flex justify-between items-center text-xs font-semibold text-gray-500 mb-6">
                           <span>{b.percentage.toFixed(0)}% Used · {daysLeftText}</span>
                           {isOver ? (
@@ -730,7 +735,6 @@ export default function BudgetPage() {
                           )}
                         </div>
 
-                        {/* 🌟 AI 洞察提示信息 */}
                         <div className="flex items-start gap-3">
                           <StatusIcon size={20} className={`shrink-0 mt-0.5 ${insight.colorClass}`} />
                           <div>

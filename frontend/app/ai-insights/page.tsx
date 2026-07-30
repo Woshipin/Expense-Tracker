@@ -1,12 +1,13 @@
 "use client";
 
 import { Card, Toast } from "@/components/ui";
-import { Sparkles, Send, Bot, User, Loader2, ArrowRight, TrendingUp, TrendingDown, Wallet, PiggyBank } from "lucide-react";
+import { Sparkles, Send, Bot, User, Loader2, ArrowRight, TrendingUp, TrendingDown, Wallet, PiggyBank, Lock } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Markdown from "react-markdown";
 import api from "@/lib/axios";
+import { usePermission } from "@/hooks/usePermission";
 
 interface MetricStats {
   totalIncome: number;
@@ -49,6 +50,8 @@ interface BudgetItem {
 
 export default function AIInsightsPage() {
   const router = useRouter();
+  const { can } = usePermission();
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
   const getLocalDateString = (date: Date) => {
@@ -183,7 +186,7 @@ Instructions:
   };
 
   const handleSendMessage = async () => {
-    if (!input.trim() || isSendingMsg) return;
+    if (!can("ai_insights.chat") || !input.trim() || isSendingMsg) return;
 
     const userText = input.trim();
     const newMessages = [...messages, { role: 'user' as const, text: userText }];
@@ -191,7 +194,6 @@ Instructions:
     setInput("");
     setIsSendingMsg(true);
 
-    // 发送后重置输入框高度到基础的 44px
     if (textareaRef.current) {
       textareaRef.current.style.height = '44px';
     }
@@ -219,18 +221,12 @@ Instructions:
     }
   };
 
-  // 处理输入框文字变化，自动调节高度
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '44px'; // 先归零到基础高度 44px
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`; // 最大高度约 5 行
-    }
-  };
-
+  // 🌟 补全变量定义（计算总花费与总限额及百分比）
   const overallSpendingLimit = budgets.reduce((acc, curr) => acc + curr.budget_amount, 0);
   const overallSpendingSpent = budgets.reduce((acc, curr) => acc + curr.spent_amount, 0);
   const overallSpendingPercentage = overallSpendingLimit > 0 ? Math.min(100, (overallSpendingSpent / overallSpendingLimit) * 100) : 0;
+
+  const canUseChatbot = can("ai_insights.chat");
 
   return (
     <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300 pb-16">
@@ -567,26 +563,32 @@ Instructions:
                 <div ref={chatEndRef} />
               </div>
 
-              {/* ✅ 完美精细修正：纯净 Flex 横排布局，输入框小字体13px，高度精准锁定 44px，同款 10px 微圆角 */}
-              <div className="p-4 border-t border-sunset-primary/10 bg-white shrink-0 flex flex-row items-end gap-3 rounded-b-3xl">
+              <div className="p-4 border-t border-sunset-primary/10 bg-white shrink-0 flex flex-row items-end gap-3 rounded-b-3xl relative">
+                {!canUseChatbot && (
+                  <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex items-center justify-center rounded-b-3xl border-t border-orange-100">
+                    <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-xl text-xs font-bold shadow-sm">
+                      <Lock size={14} className="text-amber-600" />
+                      <span>AI Chatbot disabled based on your assigned permissions.</span>
+                    </div>
+                  </div>
+                )}
+
                 <textarea
                   ref={textareaRef}
-                  placeholder="Ask AI Advisor about your monthly expenses..."
-                  // placeholder:truncate 确保在手机窄屏上提示文字只会显示 ... 而绝对不会换行撑高输入框
-                  className="flex-1 min-h-[44px] max-h-[120px] py-[12px] px-4 bg-[#fffcfb] border border-sunset-primary/20 rounded-[10px] focus:ring-2 focus:ring-sunset-primary/30 outline-none text-[13px] font-semibold resize-none transition-shadow custom-scrollbar leading-[20px] placeholder:truncate overflow-hidden"
+                  placeholder={canUseChatbot ? "Ask AI Advisor about your monthly expenses..." : "AI Chatbot is disabled."}
+                  className="flex-1 min-h-[44px] max-h-[120px] py-[12px] px-4 bg-[#fffcfb] border border-sunset-primary/20 rounded-[10px] focus:ring-2 focus:ring-sunset-primary/30 outline-none text-[13px] font-semibold resize-none transition-shadow custom-scrollbar leading-[20px] placeholder:truncate overflow-hidden disabled:bg-gray-100 disabled:cursor-not-allowed"
                   value={input}
                   onChange={(e) => {
                     setInput(e.target.value);
                     if (textareaRef.current) {
-                      textareaRef.current.style.height = '44px'; // 归零到基础高度 44px
-                      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`; // 根据内容延伸，最高120px
+                      textareaRef.current.style.height = '44px';
+                      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
                     }
                   }}
                   rows={1}
-                  style={{ height: '44px' }} // 初始强制锁定 44px
-                  disabled={isSendingMsg}
+                  style={{ height: '44px' }}
+                  disabled={isSendingMsg || !canUseChatbot}
                   onKeyDown={(e) => {
-                    // 允许按 Enter 发送，Shift+Enter 换行
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSendMessage();
@@ -596,7 +598,7 @@ Instructions:
                 <button
                   type="button"
                   onClick={handleSendMessage}
-                  disabled={isSendingMsg || !input.trim()}
+                  disabled={isSendingMsg || !input.trim() || !canUseChatbot}
                   className="shrink-0 h-[44px] w-[44px] flex items-center justify-center rounded-[10px] bg-sunset-primary text-white hover:bg-sunset-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Send size={18} />

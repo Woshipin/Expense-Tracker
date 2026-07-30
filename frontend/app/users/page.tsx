@@ -5,6 +5,7 @@ import { Card, Button, Input, Toast } from "@/components/ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Lock, User, Loader2, Image, X, ShieldCheck } from "lucide-react";
 import api from "@/lib/axios";
+import { usePermission } from "@/hooks/usePermission"; // 🌟 引入权限 Hook
 
 interface LoadingOverlayProps {
   title?: string;
@@ -35,9 +36,6 @@ const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ title, description, isF
   return <div className="flex items-center justify-center min-h-[300px] py-10">{loadingContent}</div>;
 };
 
-// ------------------------------------
-// UI 组件：状态标签 (全局统一管理颜色)
-// ------------------------------------
 const RoleBadge = ({ role }: { role: any }) => {
   switch (String(role)) {
     case '0': return <span className="inline-flex py-1 px-2.5 rounded-lg text-[10px] sm:text-xs font-bold bg-purple-50 text-purple-600">SuperAdmin</span>;
@@ -64,6 +62,8 @@ const ProviderBadge = ({ provider }: { provider: any }) => {
 const getInitials = (name: string) => { return !name ? "U" : name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2); };
 
 export default function UsersPage() {
+  const { can } = usePermission(); // 🌟 调取权限判断能力
+
   const [users, setUsers] = useState<any[]>([]);
   const [toast, setToast] = useState<{message:string, type:'success'|'error'|'warning'}|null>(null);
   
@@ -394,16 +394,19 @@ export default function UsersPage() {
             <h1 className="text-2xl font-bold text-sunset-dark">Users</h1>
             <p className="text-sm font-medium text-sunset-dark/60 mt-1">Manage system users, roles, and status.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all">
-              <Plus size={16} className="mr-1.5 shrink-0" /> Add User
-            </Button>
-          </div>
+
+          {/* 🌟 只有打勾了 users.create 权限，才显示 + Add User 按钮 */}
+          {can("users.create") && (
+            <div className="flex items-center gap-2">
+              <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all">
+                <Plus size={16} className="mr-1.5 shrink-0" /> Add User
+              </Button>
+            </div>
+          )}
         </header>
 
         <Card className="p-0 overflow-hidden shadow-xl shadow-orange-500/5 border-2 border-orange-500/20 flex flex-col min-h-0 rounded-[24px]">
           
-          {/* Toolbar - 【完美响应式阶梯修复】 */}
           <div className="p-4 sm:p-6 border-b border-orange-500/10 flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white shrink-0">
             <div className="relative w-full xl:w-80 shrink-0">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-sunset-dark/40" size={18} />
@@ -417,11 +420,6 @@ export default function UsersPage() {
               />
             </div>
             
-            {/* 核心修复点：
-                1. 手机端: grid-cols-1
-                2. iPad Mini (sm): sm:grid-cols-2 (一行展示2个，不会因为太窄而挤在一起)
-                3. iPad Pro (lg): lg:grid-cols-3 (屏幕变宽，一行可以装下3个)
-            */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full xl:w-auto xl:flex-1 xl:max-w-3xl xl:justify-end">
               <Select value={filterProvider} onValueChange={(val) => { setFilterProvider(val); setCurrentPage(1); }}>
                 <SelectTrigger className="bg-white border-orange-500/80 hover:border-orange-500 rounded-xl h-11 text-xs font-bold text-sunset-dark shadow-sm transition-all focus:ring-2 focus:ring-orange-500/30">
@@ -489,11 +487,19 @@ export default function UsersPage() {
                      <StatusBadge status={u.status} />
                   </div>
 
-                  <div className="flex gap-2 pt-2 mt-1">
-                     <Button variant="ghost" className="flex-1 py-2 h-auto text-xs font-bold text-blue-500 hover:bg-blue-50 transition-all border border-transparent" onClick={() => setViewingUser(u)}><Eye size={14} className="mr-1 inline"/> View</Button>
-                     <Button variant="ghost" className="flex-1 py-2 h-auto text-xs font-bold text-emerald-500 hover:bg-emerald-50 transition-all border border-transparent" onClick={() => openEditModal(u)}><Edit2 size={14} className="mr-1 inline"/> Edit</Button>
-                     <Button variant="ghost" className="flex-1 py-2 h-auto text-xs font-bold text-red-500 hover:bg-red-50 transition-all border border-transparent" onClick={() => setDeletingUser(u)}><Trash2 size={14} className="mr-1 inline"/> Delete</Button>
-                  </div>
+                  {(can("users.view") || can("users.edit") || can("users.delete")) && (
+                    <div className="flex gap-2 pt-2 mt-1">
+                       {can("users.view") && (
+                         <Button variant="ghost" className="flex-1 py-2 h-auto text-xs font-bold text-blue-500 hover:bg-blue-50 transition-all border border-transparent" onClick={() => setViewingUser(u)}><Eye size={14} className="mr-1 inline"/> View</Button>
+                       )}
+                       {can("users.edit") && (
+                         <Button variant="ghost" className="flex-1 py-2 h-auto text-xs font-bold text-emerald-500 hover:bg-emerald-50 transition-all border border-transparent" onClick={() => openEditModal(u)}><Edit2 size={14} className="mr-1 inline"/> Edit</Button>
+                       )}
+                       {can("users.delete") && (
+                         <Button variant="ghost" className="flex-1 py-2 h-auto text-xs font-bold text-red-500 hover:bg-red-50 transition-all border border-transparent" onClick={() => setDeletingUser(u)}><Trash2 size={14} className="mr-1 inline"/> Delete</Button>
+                       )}
+                    </div>
+                  )}
                </div>
             ))}
             {!isLoading && users.length === 0 && (
@@ -540,11 +546,19 @@ export default function UsersPage() {
                     <td className="p-4"><StatusBadge status={u.status} /></td>
                     
                     <td className="p-4 pr-6">
-                      <div className="flex items-center justify-center gap-1">
-                         <button onClick={() => setViewingUser(u)} className="p-2 text-sunset-dark/40 hover:text-blue-500 hover:bg-blue-500/10 rounded-xl transition-colors" title="View"><Eye size={18} /></button>
-                         <button onClick={() => openEditModal(u)} className="p-2 text-sunset-dark/40 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-xl transition-colors" title="Edit"><Edit2 size={18} /></button>
-                         <button onClick={() => setDeletingUser(u)} className="p-2 text-sunset-dark/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-colors" title="Delete"><Trash2 size={18} /></button>
-                      </div>
+                      {(can("users.view") || can("users.edit") || can("users.delete")) && (
+                        <div className="flex items-center justify-center gap-1">
+                           {can("users.view") && (
+                             <button onClick={() => setViewingUser(u)} className="p-2 text-sunset-dark/40 hover:text-blue-500 hover:bg-blue-500/10 rounded-xl transition-colors" title="View"><Eye size={18} /></button>
+                           )}
+                           {can("users.edit") && (
+                             <button onClick={() => openEditModal(u)} className="p-2 text-sunset-dark/40 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-xl transition-colors" title="Edit"><Edit2 size={18} /></button>
+                           )}
+                           {can("users.delete") && (
+                             <button onClick={() => setDeletingUser(u)} className="p-2 text-sunset-dark/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-colors" title="Delete"><Trash2 size={18} /></button>
+                           )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}

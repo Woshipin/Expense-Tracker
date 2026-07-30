@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Plus, Edit2, Trash2, Eye, ChevronLeft, ChevronRight, Loader2, X, AlertCircle, ArrowRight } from "lucide-react";
 import * as Icons from "lucide-react"; 
 import api from "@/lib/axios";
+import { usePermission } from "@/hooks/usePermission";
 
 // 预设的可选支付方式 Lucide 图标
 const AVAILABLE_ICONS = [
@@ -26,6 +27,8 @@ const DynamicIcon = ({ name, className, style }: { name: string; className?: str
 };
 
 export default function PaymentMethodsPage() {
+  const { can } = usePermission();
+
   const [methods, setMethods] = useState<any[]>([]);
   const [typesList, setTypesList] = useState<any[]>([]);
   const [toast, setToast] = useState<{message:string, type:'success'|'error'|'warning'}|null>(null);
@@ -212,7 +215,6 @@ export default function PaymentMethodsPage() {
               <div className="w-full">
                 <h3 className="text-xl font-extrabold text-sunset-dark">{viewingMethod?.name}</h3>
                 
-                {/* Modal 中同时展示 Type 和 Status 标签 */}
                 <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
                   <span className="inline-flex py-1 px-2.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-100/80">
                     {viewingMethod?.type?.name || typesList.find(t => String(t.id) === String(viewingMethod?.type_id))?.name || 'Method'}
@@ -424,11 +426,15 @@ export default function PaymentMethodsPage() {
             <h1 className="text-2xl font-bold text-sunset-dark">Payment Methods</h1>
             <p className="text-sm font-semibold text-sunset-dark/60 mt-1">Manage system payment channels and their availability.</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600">
-              <Plus size={16} className="mr-1.5 shrink-0" /> Add Method
-            </Button>
-          </div>
+          
+          {/* 只有打勾了 payment_methods.create 权限，才显示 + Add Method 按钮 */}
+          {can("payment_methods.create") && (
+            <div className="flex items-center gap-2">
+              <Button onClick={openAddModal} className="px-5 py-2.5 text-sm h-auto flex items-center whitespace-nowrap shadow-md hover:shadow-lg transition-all bg-orange-500 text-white hover:bg-orange-600">
+                <Plus size={16} className="mr-1.5 shrink-0" /> Add Method
+              </Button>
+            </div>
+          )}
         </header>
 
         {/* Toolbar */}
@@ -519,11 +525,28 @@ export default function PaymentMethodsPage() {
                             <p className="text-xs font-semibold text-sunset-dark/40 truncate mt-0.5">{m.description || 'No description'}</p>
                           </div>
                         </div>
-                        <div className="flex gap-1 bg-slate-50 p-1.5 rounded-2xl border border-gray-100 shrink-0">
-                          <button onClick={() => setViewingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors"><Eye size={16}/></button>
-                          <button onClick={() => openEditModal(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-emerald-500 hover:bg-emerald-50 transition-colors"><Edit2 size={16}/></button>
-                          <button onClick={() => setDeletingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={16}/></button>
-                        </div>
+
+                        {/* 🌟 只有拥有 View/Edit/Delete 任意一个打勾权限时，才渲染操作栏 */}
+                        {(can("payment_methods.view") || can("payment_methods.edit") || can("payment_methods.delete")) && (
+                          <div className="flex gap-1 bg-slate-50 p-1.5 rounded-2xl border border-gray-100 shrink-0">
+                            
+                            {/* 🌟 只有打勾了 View，才渲染眼睛图标 */}
+                            {can("payment_methods.view") && (
+                              <button onClick={() => setViewingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="View"><Eye size={16}/></button>
+                            )}
+                            
+                            {/* 🌟 只有打勾了 Edit，才渲染铅笔图标 */}
+                            {can("payment_methods.edit") && (
+                              <button onClick={() => openEditModal(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-emerald-500 hover:bg-emerald-50 transition-colors" title="Edit"><Edit2 size={16}/></button>
+                            )}
+
+                            {/* 🌟 只有打勾了 Delete，才渲染垃圾桶图标 */}
+                            {can("payment_methods.delete") && (
+                              <button onClick={() => setDeletingMethod(m)} className="p-1.5 rounded-lg text-sunset-dark/50 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete"><Trash2 size={16}/></button>
+                            )}
+
+                          </div>
+                        )}
                       </div>
                     ))}
                     {group.items.length === 0 && (

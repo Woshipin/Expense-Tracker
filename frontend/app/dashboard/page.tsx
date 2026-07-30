@@ -6,6 +6,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/axios";
+import { usePermission } from "@/hooks/usePermission"; // 🌟 引入权限 Hook
 
 interface DashboardMetrics {
   balance: number;
@@ -38,12 +39,12 @@ interface TransactionItem {
 interface BudgetItem {
   id: number;
   category: string;
-  category_color?: string; // 新增：分类主题色
+  category_color?: string;
   budget_amount: number;
   spent_amount: number;
   percentage: number;
-  month: number; // 新增：预算月份
-  year: number; // 新增：预算年份
+  month: number;
+  year: number;
 }
 
 interface DashboardData {
@@ -57,6 +58,8 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { can } = usePermission(); // 🌟 调取权限判断能力
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -87,7 +90,6 @@ export default function DashboardPage() {
     return isNegative ? `-RM ${formattedNum}` : `RM ${formattedNum}`;
   };
 
-  // 数字月份转换为文字简写
   const getMonthName = (monthNum: number) => {
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return months[monthNum - 1] || "Month";
@@ -318,7 +320,7 @@ export default function DashboardPage() {
           </div>
         </Card>
 
-        {/* Budget Status 板块 - 进行了数据可视化与细目设计升级 */}
+        {/* Budget Status */}
         <Card className="p-6 bg-white rounded-2xl shadow-sm border border-sunset-primary/10 md:col-span-2 xl:col-span-1">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-bold text-sunset-dark">Budget Status</h3>
@@ -327,7 +329,6 @@ export default function DashboardPage() {
             </button>
           </div>
           
-          {/* 总指标进度 */}
           <div className="mb-6 bg-sunset-primary/5 p-4 rounded-2xl border border-sunset-primary/10">
             <div className="flex justify-between items-end mb-2">
               <div>
@@ -348,7 +349,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 循环渲染每一个具体预算信息 (提供高度易读的细节支持) */}
           <div className="space-y-4">
             {data.budgets.length > 0 ? (
               data.budgets.map((budget) => {
@@ -358,7 +358,6 @@ export default function DashboardPage() {
                 
                 return (
                   <div key={budget.id} className="p-3.5 bg-gray-50/70 rounded-xl border border-gray-100 space-y-2.5">
-                    {/* 第一排：分类、月份、超支百分比 */}
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2 min-w-0">
                         <div 
@@ -366,7 +365,6 @@ export default function DashboardPage() {
                           style={{ backgroundColor: budget.category_color }} 
                         />
                         <span className="font-bold text-gray-850 text-sm truncate">{budget.category}</span>
-                        {/* 增加月份和年份标签 */}
                         <span className="text-[10px] font-bold px-1.5 py-0.5 bg-gray-200/50 text-gray-500 rounded-md shrink-0">
                           {getMonthName(budget.month)} {budget.year}
                         </span>
@@ -376,7 +374,6 @@ export default function DashboardPage() {
                       </span>
                     </div>
 
-                    {/* 第二排：进度条 */}
                     <div className="w-full bg-gray-200/80 rounded-full h-2">
                       <div 
                         className={`${barColor} h-2 rounded-full transition-all duration-500`} 
@@ -384,13 +381,11 @@ export default function DashboardPage() {
                       ></div>
                     </div>
 
-                    {/* 第三排：花费与上限明细 */}
                     <div className="flex justify-between items-center text-xs text-gray-500">
                       <span>Spent: <strong className="text-gray-800 font-bold">{formatCurrency(budget.spent_amount)}</strong></span>
                       <span>Limit: <strong className="text-gray-800 font-bold">{formatCurrency(budget.budget_amount)}</strong></span>
                     </div>
 
-                    {/* 第四排：自动预算结余（Remaining / Overspent） */}
                     <div className="text-[11px] pt-1 border-t border-dashed border-gray-200 flex justify-end">
                       {isOverspent ? (
                         <span>

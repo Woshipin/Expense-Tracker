@@ -7,7 +7,7 @@ import axios from "axios";
 //  "auto"       => 开启自适应检测（根据当前域名或手机雷达自检）
 // =========================================================================
 type ApiMode = "local" | "production" | "auto"; // 🌟 明确定义类型，消除 TS 报错
-const CURRENT_API_MODE: ApiMode = "production"; 
+const CURRENT_API_MODE: ApiMode = "local"; 
 
 // -------------------------------------------------------------------------
 const PRODUCTION_API_URL = "https://expense-tracker-system-pe3l.onrender.com/api";
